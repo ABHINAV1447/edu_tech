@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 180" width="100%" height="100%">
+  <!-- Definitions for gradients/shadows if needed -->
+  <defs>
+    <style>
+      .orange-text { font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif; font-size: 80px; font-weight: 700; fill: #ff9000; letter-spacing: -1px; }
+      .blue-text { font-family: 'Inter', 'Segoe UI', sans-serif; font-size: 32px; font-weight: 500; fill: #3b82f6; }
+      .blue-line { stroke: #3b82f6; stroke-width: 4; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <!-- Main Word: SKILLNARA -->
+  <!-- "SK" -->
+  <text x="10" y="95" class="orange-text">SK</text>
+
+  <!-- The "I" Icon (Graduation Cap + Pen Nib) -->
+  <g transform="translate(108, 0)">
+    <!-- Graduation Cap -->
+    <!-- Diamond/Top -->
+    <path d="M 50 15 L 95 38 L 50 61 L 5 38 Z" fill="none" stroke="#3b82f6" stroke-width="5" stroke-linejoin="round" />
+    <!-- Tassel cap & hanging cord -->
+    <circle cx="50" cy="38" r="3" fill="#3b82f6" />
+    <path d="M 75 30 L 90 48 L 90 70" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" />
+    <circle cx="90" cy="70" r="2.5" fill="#3b82f6" />
+    <!-- Cap Box/Underneath -->
+    <path d="M 28 47 L 28 65 L 72 65 L 72 47" fill="none" stroke="#3b82f6" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" />
+
+    <!-- Pen Nib -->
+    <path d="M 28 72 L 50 72 L 72 72 L 72 90 L 50 125 L 28 90 Z" fill="none" stroke="#3b82f6" stroke-width="5" stroke-linejoin="round" />
+    <!-- Nib tip slice & hole -->
+    <line x1="50" y1="72" x2="50" y2="105" stroke="#3b82f6" stroke-width="4" stroke-linecap="round" />
+    <circle cx="50" cy="105" r="3" fill="#3b82f6" />
+  </g>
+
+  <!-- "LLNARA" -->
+  <text x="212" y="95" class="orange-text">LLNARA</text>
+
+  <!-- Subtext: Upskill Now -->
+  <!-- Left Line -->
+  <line x1="28" y1="138" x2="135" y2="138" class="blue-line" />
+  
+  <!-- "Upskill Now" text -->
+  <text x="148" y="148" class="blue-text">Upskill Now</text>
+  
+  <!-- Right Line with Arrow -->
+  <line x1="332" y1="138" x2="495" y2="138" class="blue-line" />
+  <!-- Arrow Head -->
+  <path d="M 483 130 L 497 138 L 483 146" fill="none" stroke="#3b82f6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
