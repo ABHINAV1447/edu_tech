@@ -82,14 +82,25 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
   const activeCourseId = getCourseId(liveCourse);
   const isPurchased = purchasedCourseIds.includes(activeCourseId);
 
-  const isLiveActive = localStorage.getItem('skillnara_live_class_active') === 'true';
-  if (!isTeacher && !isLiveActive) {
+  const [isLiveActiveState, setIsLiveActiveState] = useState(() => {
+    return localStorage.getItem('skillnara_live_class_active') === 'true';
+  });
+
+  useEffect(() => {
+    const handleStorage = () => {
+      setIsLiveActiveState(localStorage.getItem('skillnara_live_class_active') === 'true');
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  if (!isLiveActiveState) {
     return (
       <div className="container animate-fade-in" style={{
         padding: '6rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '65vh'
       }}>
         <div className="glass-card" style={{
-          maxWidth: '520px', width: '100%', padding: '3.5rem 2.5rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1.5rem',
+          maxWidth: '540px', width: '100%', padding: '3.5rem 2.5rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1.5rem',
           border: '1px solid var(--border-color)', boxShadow: 'var(--primary-glow) 0 10px 40px'
         }}>
           <div style={{
@@ -100,30 +111,45 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           </div>
           <div>
             <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Waiting For Instructor
+              {isTeacher ? 'Broadcast Concluded' : 'Waiting For Instructor'}
             </span>
             <h2 style={{ fontSize: '1.65rem', fontWeight: 800, marginTop: '0.5rem' }}>
               No Active Live Classroom
             </h2>
           </div>
           <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-            There are currently no active live broadcasts. Instructors will start live classes according to their schedules. Once started, you can join directly from your dashboard or this page.
+            {isTeacher 
+              ? 'The live broadcast has been ended. You can start a new live class anytime from your teacher dashboard.'
+              : 'There are currently no active live broadcasts. Instructors will start live classes according to their schedules. Once started, you can join directly from your dashboard or this page.'
+            }
           </p>
-          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '0.5rem' }}>
-            <button
-              onClick={() => setNavigationTab && setNavigationTab('dashboard')}
-              className="btn btn-secondary"
-              style={{ borderRadius: '25px', padding: '0.6rem 1.5rem', fontSize: '0.85rem' }}
-            >
-              Check Schedule
-            </button>
-            <button
-              onClick={() => setNavigationTab && setNavigationTab('recorded')}
-              className="btn btn-primary"
-              style={{ borderRadius: '25px', padding: '0.6rem 1.5rem', fontSize: '0.85rem' }}
-            >
-              Browse Recorded Archive
-            </button>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+            {isTeacher ? (
+              <button
+                onClick={() => setNavigationTab && setNavigationTab('dashboard')}
+                className="btn btn-primary"
+                style={{ borderRadius: '25px', padding: '0.65rem 1.8rem', fontSize: '0.85rem' }}
+              >
+                Go to Teacher Dashboard
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setNavigationTab && setNavigationTab('dashboard')}
+                  className="btn btn-secondary"
+                  style={{ borderRadius: '25px', padding: '0.6rem 1.5rem', fontSize: '0.85rem' }}
+                >
+                  Check Schedule
+                </button>
+                <button
+                  onClick={() => setNavigationTab && setNavigationTab('recorded')}
+                  className="btn btn-primary"
+                  style={{ borderRadius: '25px', padding: '0.6rem 1.5rem', fontSize: '0.85rem' }}
+                >
+                  Browse Recorded Archive
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -808,9 +834,16 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
               <button
                 onClick={() => {
                   if (confirm('Are you sure you want to end this live broadcast? All students will be disconnected.')) {
-                    localStorage.removeItem('skillnara_live_class_active');
-                    alert('Broadcast terminated.');
-                    window.location.reload();
+                    localStorage.setItem('skillnara_live_class_active', 'false');
+                    localStorage.removeItem('skillnara_active_live_title');
+                    localStorage.removeItem('skillnara_active_live_course');
+                    if (screenStreamRef.current) {
+                      screenStreamRef.current.getTracks().forEach(track => track.stop());
+                      screenStreamRef.current = null;
+                    }
+                    setIsScreenSharing(false);
+                    setIsRecording(false);
+                    setIsLiveActiveState(false);
                   }
                 }}
                 className="btn btn-primary btn-sm"
