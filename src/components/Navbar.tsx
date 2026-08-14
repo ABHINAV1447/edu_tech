@@ -123,7 +123,12 @@ export default function Navbar({ activeTab, setActiveTab, isDarkMode, setIsDarkM
                 {user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{user.name}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{user.name}</span>
+                  <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-mint)', fontWeight: 800, padding: '1px 6px', borderRadius: '8px' }}>
+                    Verified ✓
+                  </span>
+                </div>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                   {user.role === 'teacher' ? 'Instructor' : 'Student'}
                 </span>

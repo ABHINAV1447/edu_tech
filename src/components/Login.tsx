@@ -1,24 +1,60 @@
-import { useState } from 'react';
-import { Lock, User, LogIn, GraduationCap, Monitor, Mail, CheckCircle, X, Sparkles } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Lock, User, LogIn, GraduationCap, Monitor, Mail, ShieldCheck, RefreshCw, KeyRound, Sparkles } from 'lucide-react';
 import logo from '../assets/logo.svg';
 
 interface LoginProps {
-  onLogin: (user: { name: string; role: 'student' | 'teacher'; instructorId?: string; email?: string }) => void;
+  onLogin: (user: { name: string; role: 'student' | 'teacher'; instructorId?: string; email?: string; isEmailVerified?: boolean }) => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup');
+  const [step, setStep] = useState<'details' | 'otp'>('details');
   const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  // Welcome Email Notification Modal State
-  const [showWelcomeEmail, setShowWelcomeEmail] = useState(false);
-  const [registeredUser, setRegisteredUser] = useState<{ name: string; email: string; role: string } | null>(null);
+  // 6-Digit OTP State
+  const [generatedOtp, setGeneratedOtp] = useState('');
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [otpTimer, setOtpTimer] = useState(120);
+  const [showOtpToast, setShowOtpToast] = useState(false);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Password Strength Calculation
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { label: 'None', width: '0%', color: 'transparent' };
+    if (pass.length < 6) return { label: 'Weak', width: '33%', color: '#f43f5e' };
+    if (pass.length < 9 || !/\d/.test(pass)) return { label: 'Medium', width: '66%', color: '#f59e0b' };
+    return { label: 'Strong', width: '100%', color: '#10b981' };
+  };
+
+  const strength = getPasswordStrength(password);
+
+  // OTP Countdown timer
+  useEffect(() => {
+    let timer: any = null;
+    if (step === 'otp' && otpTimer > 0) {
+      timer = setInterval(() => {
+        setOtpTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [step, otpTimer]);
+
+  const generateNewOtp = (userEmail: string) => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedOtp(code);
+    setOtpDigits(['', '', '', '', '', '']);
+    setOtpTimer(120);
+    setShowOtpToast(true);
+    if (!email) setEmail(userEmail);
+  };
+
+  const handleDetailsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim() || (authMode === 'signup' && !email.trim())) {
       setError('Please fill in all required fields.');
@@ -26,34 +62,72 @@ export default function Login({ onLogin }: LoginProps) {
     }
 
     if (authMode === 'signup') {
-      // Save new registration to localStorage
-      const existing = JSON.parse(localStorage.getItem('skillnara_registered_users') || '[]');
-      const newUser = {
-        id: `usr-${Date.now()}`,
-        name: username,
-        email: email || `${username.toLowerCase().replace(/\s+/g, '')}@skillnara.edu`,
-        role,
-        joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        status: 'Active'
-      };
-      existing.push(newUser);
-      localStorage.setItem('skillnara_registered_users', JSON.stringify(existing));
-
-      // Trigger Welcome Email Notification modal
-      setRegisteredUser({ name: username, email: email || `${username.toLowerCase().replace(/\s+/g, '')}@skillnara.edu`, role });
-      setShowWelcomeEmail(true);
+      const userEmail = email.trim() || `${username.toLowerCase().replace(/\s+/g, '')}@skillnara.edu`;
+      generateNewOtp(userEmail);
+      setStep('otp');
+      setError('');
     } else {
-      // Sign in logic
-      executeLogin(username, role);
+      // Sign In directly
+      executeLogin(username, role, email || `${username.toLowerCase().replace(/\s+/g, '')}@skillnara.edu`, true);
     }
   };
 
-  const executeLogin = (userStr: string, userRole: 'student' | 'teacher') => {
+  const handleDigitChange = (index: number, value: string) => {
+    if (value.length > 1) value = value.substring(value.length - 1);
+    const newDigits = [...otpDigits];
+    newDigits[index] = value;
+    setOtpDigits(newDigits);
+
+    // Auto advance focus to next input box
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleDigitKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleVerifyOtpSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const enteredCode = otpDigits.join('');
+    if (enteredCode.length !== 6) {
+      setError('Please enter all 6 verification digits.');
+      return;
+    }
+
+    if (enteredCode !== generatedOtp) {
+      setError('Incorrect 6-digit verification code. Please check the email toast or click resend.');
+      return;
+    }
+
+    // OTP Verified successfully!
+    const userEmail = email || `${username.toLowerCase().replace(/\s+/g, '')}@skillnara.edu`;
+    
+    // Save verified registration into localStorage
+    const existing = JSON.parse(localStorage.getItem('skillnara_registered_users') || '[]');
+    existing.push({
+      id: `usr-${Date.now()}`,
+      name: username,
+      email: userEmail,
+      role,
+      joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      status: 'Verified ✓'
+    });
+    localStorage.setItem('skillnara_registered_users', JSON.stringify(existing));
+
+    executeLogin(username, role, userEmail, true);
+  };
+
+  const executeLogin = (userStr: string, userRole: 'student' | 'teacher', userEmail: string, isVerified: boolean) => {
     if (userRole === 'student') {
       onLogin({
         name: userStr,
         role: 'student',
-        email: email || `${userStr.toLowerCase().replace(/\s+/g, '')}@skillnara.edu`
+        email: userEmail,
+        isEmailVerified: isVerified
       });
     } else {
       let name = userStr;
@@ -73,13 +147,16 @@ export default function Login({ onLogin }: LoginProps) {
         name,
         role: 'teacher',
         instructorId,
-        email: email || `${name.toLowerCase().replace(/\s+/g, '')}@skillnara.edu`
+        email: userEmail,
+        isEmailVerified: isVerified
       });
     }
   };
 
-  const handleQuickLogin = (selectedRole: 'student' | 'teacher', demoUser: string) => {
-    executeLogin(demoUser, selectedRole);
+  const formatTimer = (totalSecs: number) => {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -87,217 +164,298 @@ export default function Login({ onLogin }: LoginProps) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: '75vh',
-      padding: '2rem'
+      minHeight: '78vh',
+      padding: '2rem',
+      position: 'relative'
     }}>
-      {/* Official Skillnara Welcome Email Preview Modal */}
-      {showWelcomeEmail && registeredUser && (
-        <div style={{
-          position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 12, 21, 0.85)', backdropFilter: 'blur(10px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '1rem'
+
+      {/* Simulated Live Email Inbox Toast Notification Banner */}
+      {showOtpToast && (
+        <div className="animate-fade-in" style={{
+          position: 'fixed', top: '90px', right: '24px', zIndex: 9999,
+          backgroundColor: '#18191c', border: '1px solid #34d399', borderRadius: '16px',
+          padding: '1rem 1.25rem', maxWidth: '380px', width: '100%',
+          boxShadow: '0 12px 35px rgba(0,0,0,0.6), 0 0 20px rgba(52, 211, 153, 0.2)',
+          display: 'flex', flexDirection: 'column', gap: '0.5rem', color: '#ffffff'
         }}>
-          <div className="glass-card animate-fade-in" style={{
-            maxWidth: '560px', width: '100%', padding: '2rem', borderRadius: '20px',
-            backgroundColor: '#18191c', border: '1px solid var(--primary)', boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
-            display: 'flex', flexDirection: 'column', gap: '1.25rem', color: '#ffffff'
-          }}>
-            {/* Email Banner Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Mail size={22} />
-                </div>
-                <div>
-                  <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Welcome Email Dispatched
-                  </span>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>Skillnara Registration Confirmation</h3>
-                </div>
-              </div>
-              <button onClick={() => { setShowWelcomeEmail(false); executeLogin(registeredUser.name, role); }} style={{ background: 'none', border: 'none', color: '#9aa0a6', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', fontWeight: 800, color: '#34d399' }}>
+              <Mail size={15} />
+              <span>INBOX: Skillnara Email Verification</span>
             </div>
-
-            {/* Email Metadata */}
-            <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.85rem 1rem', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.3rem', color: '#9aa0a6' }}>
-              <div><strong style={{ color: '#ffffff' }}>From:</strong> Skillnara Welcome Desk &lt;welcome@skillnara.edu&gt;</div>
-              <div><strong style={{ color: '#ffffff' }}>To:</strong> {registeredUser.name} &lt;{registeredUser.email}&gt;</div>
-              <div><strong style={{ color: '#ffffff' }}>Subject:</strong> Welcome to Skillnara! Your Registration is Confirmed 🎉</div>
-            </div>
-
-            {/* Email Body Preview */}
-            <div style={{ fontSize: '0.88rem', lineHeight: 1.6, color: '#e8eaed', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              <p>Dear <strong>{registeredUser.name}</strong>,</p>
-              <p>Welcome to <strong>Skillnara</strong>! We are thrilled to confirm your account registration as a <strong>{registeredUser.role === 'teacher' ? 'Instructor' : 'Student Learner'}</strong>.</p>
-              
-              <div style={{ backgroundColor: 'rgba(255, 144, 0, 0.1)', borderLeft: '3px solid #ff9000', padding: '0.75rem 1rem', borderRadius: '0 8px 8px 0', fontSize: '0.82rem' }}>
-                <strong>🚀 What you can do on Skillnara:</strong>
-                <ul style={{ paddingLeft: '1.2rem', marginTop: '0.3rem' }}>
-                  <li>Join live Google Meet broadcasts with screen share & captions</li>
-                  <li>Replay past lectures & use SkillBot AI Tutor chatbot</li>
-                  <li>Download course materials, slides & homework exercises</li>
-                </ul>
-              </div>
-
-              <p>Happy Learning!<br /><em>The Skillnara Academic Team</em></p>
-            </div>
-
-            <button
-              onClick={() => { setShowWelcomeEmail(false); executeLogin(registeredUser.name, role); }}
-              className="btn btn-primary"
-              style={{ borderRadius: '25px', padding: '0.65rem 1.8rem', alignSelf: 'center', fontSize: '0.85rem', width: '100%', justifyContent: 'center' }}
-            >
-              <span>Continue to Dashboard</span>
+            <button onClick={() => setShowOtpToast(false)} style={{ background: 'none', border: 'none', color: '#9aa0a6', cursor: 'pointer' }}>
+              ✕
             </button>
           </div>
+
+          <p style={{ fontSize: '0.82rem', color: '#e8eaed', margin: 0 }}>
+            Verification code sent to <strong>{email || 'your email'}</strong>:
+          </p>
+
+          <div style={{
+            backgroundColor: 'rgba(52, 211, 153, 0.15)', padding: '0.4rem 0.8rem', borderRadius: '8px',
+            fontFamily: 'monospace', fontSize: '1.25rem', fontWeight: 800, color: '#34d399',
+            letterSpacing: '0.25em', textAlign: 'center', border: '1px solid rgba(52, 211, 153, 0.4)'
+          }}>
+            {generatedOtp}
+          </div>
+
+          <span style={{ fontSize: '0.68rem', color: '#9aa0a6', textAlign: 'right' }}>
+            Code expires in 2 minutes
+          </span>
         </div>
       )}
 
-      {/* Main Card */}
+      {/* Main Glass Card */}
       <div className="glass-card animate-fade-in" style={{
         width: '100%',
-        maxWidth: '460px',
+        maxWidth: '470px',
         padding: '2.5rem',
         display: 'flex',
         flexDirection: 'column',
-        gap: '1.75rem'
+        gap: '1.75rem',
+        boxShadow: 'var(--card-shadow)'
       }}>
+
         {/* Branding header */}
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-          <img src={logo} alt="Skillnara Logo" style={{ height: '55px', width: 'auto' }} />
-          <h2 style={{ fontSize: '1.5rem', marginTop: '0.2rem' }}>
-            {authMode === 'signin' ? 'Sign In to Skillnara' : 'Create Your Account'}
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
+          <img src={logo} alt="Skillnara Logo" style={{ height: '52px', width: 'auto' }} />
+          <h2 style={{ fontSize: '1.45rem', marginTop: '0.2rem' }}>
+            {step === 'otp' ? 'Verify Email Code (OTP)' : (authMode === 'signin' ? 'Sign In to Skillnara' : 'Create Trusted Account')}
           </h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            {authMode === 'signin' ? 'Access your dashboard, live broadcasts & AI tutor' : 'Join 5,000+ learners connected globally'}
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            {step === 'otp' ? `We sent a 6-digit code to ${email}` : '2-Step Trusted Authentication System'}
           </p>
         </div>
 
-        {/* Sign In vs Register Toggle */}
-        <div style={{ display: 'flex', backgroundColor: 'var(--bg-tertiary)', borderRadius: '25px', padding: '3px', border: '1px solid var(--border-color)' }}>
-          <button
-            type="button"
-            onClick={() => { setAuthMode('signin'); setError(''); }}
-            className={`btn btn-sm ${authMode === 'signin' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ flex: 1, borderRadius: '20px', fontSize: '0.8rem' }}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => { setAuthMode('signup'); setError(''); }}
-            className={`btn btn-sm ${authMode === 'signup' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ flex: 1, borderRadius: '20px', fontSize: '0.8rem', gap: '0.3rem' }}
-          >
-            <Sparkles size={13} />
-            <span>Create Account</span>
-          </button>
-        </div>
+        {/* STEP 1: CREDENTIALS INPUT */}
+        {step === 'details' && (
+          <>
+            {/* Sign In vs Register Toggle */}
+            <div style={{ display: 'flex', backgroundColor: 'var(--bg-tertiary)', borderRadius: '25px', padding: '3px', border: '1px solid var(--border-color)' }}>
+              <button
+                type="button"
+                onClick={() => { setAuthMode('signin'); setError(''); }}
+                className={`btn btn-sm ${authMode === 'signin' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ flex: 1, borderRadius: '20px', fontSize: '0.8rem' }}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode('signup'); setError(''); }}
+                className={`btn btn-sm ${authMode === 'signup' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ flex: 1, borderRadius: '20px', fontSize: '0.8rem', gap: '0.3rem' }}
+              >
+                <Sparkles size={13} />
+                <span>Create Account</span>
+              </button>
+            </div>
 
-        {/* Role tabs switcher */}
-        <div style={{
-          display: 'flex',
-          gap: '0.25rem',
-          backgroundColor: 'var(--bg-tertiary)',
-          padding: '0.25rem',
-          borderRadius: '50px',
-          border: '1px solid var(--border-color)'
-        }}>
-          <button
-            type="button"
-            onClick={() => { setRole('student'); setError(''); }}
-            className={`btn btn-sm ${role === 'student' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ flex: 1, borderRadius: '50px', fontSize: '0.85rem', gap: '0.4rem' }}
-          >
-            <GraduationCap size={16} />
-            <span>Student</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => { setRole('teacher'); setError(''); }}
-            className={`btn btn-sm ${role === 'teacher' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ flex: 1, borderRadius: '50px', fontSize: '0.85rem', gap: '0.4rem' }}
-          >
-            <Monitor size={16} />
-            <span>Instructor</span>
-          </button>
-        </div>
-
-        {/* Login / Signup Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
-          {error && (
+            {/* Role Switcher */}
             <div style={{
-              padding: '0.75rem 1rem',
-              backgroundColor: 'rgba(244, 63, 94, 0.12)',
-              border: '1px solid var(--accent-rose)',
-              borderRadius: '8px',
-              color: 'var(--accent-rose)',
-              fontSize: '0.8rem',
-              fontWeight: 500
+              display: 'flex', gap: '0.25rem', backgroundColor: 'var(--bg-tertiary)',
+              padding: '0.25rem', borderRadius: '50px', border: '1px solid var(--border-color)'
             }}>
-              {error}
+              <button
+                type="button"
+                onClick={() => { setRole('student'); setError(''); }}
+                className={`btn btn-sm ${role === 'student' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ flex: 1, borderRadius: '50px', fontSize: '0.85rem', gap: '0.4rem' }}
+              >
+                <GraduationCap size={16} />
+                <span>Student</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setRole('teacher'); setError(''); }}
+                className={`btn btn-sm ${role === 'teacher' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ flex: 1, borderRadius: '50px', fontSize: '0.85rem', gap: '0.4rem' }}
+              >
+                <Monitor size={16} />
+                <span>Instructor</span>
+              </button>
             </div>
-          )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Full Name / Username
-            </label>
-            <div style={{ position: 'relative' }}>
-              <User size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                placeholder={role === 'student' ? 'e.g. Student Nara' : 'e.g. Sree Ma\'am'}
-                className="form-input"
-                style={{ paddingLeft: '2.5rem', borderRadius: '25px', fontSize: '0.9rem' }}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
-          </div>
+            <form onSubmit={handleDetailsSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+              {error && (
+                <div style={{
+                  padding: '0.75rem 1rem', backgroundColor: 'rgba(244, 63, 94, 0.12)',
+                  border: '1px solid var(--accent-rose)', borderRadius: '8px',
+                  color: 'var(--accent-rose)', fontSize: '0.8rem', fontWeight: 500
+                }}>
+                  {error}
+                </div>
+              )}
 
-          {authMode === 'signup' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                Email Address (For Registration Email)
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Mail size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                <input
-                  type="email"
-                  placeholder="e.g. student@gmail.com"
-                  className="form-input"
-                  style={{ paddingLeft: '2.5rem', borderRadius: '25px', fontSize: '0.9rem' }}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Full Name</label>
+                <div style={{ position: 'relative' }}>
+                  <User size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input
+                    type="text"
+                    required
+                    placeholder={role === 'student' ? 'e.g. Student Nara' : 'e.g. Sree Ma\'am'}
+                    className="form-input"
+                    style={{ paddingLeft: '2.5rem', borderRadius: '25px', fontSize: '0.9rem' }}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
-          )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Password
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Lock size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="form-input"
-                style={{ paddingLeft: '2.5rem', borderRadius: '25px', fontSize: '0.9rem' }}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
+              {authMode === 'signup' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    Email Address (Sends 6-Digit OTP)
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Mail size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. student@gmail.com"
+                      className="form-input"
+                      style={{ paddingLeft: '2.5rem', borderRadius: '25px', fontSize: '0.9rem' }}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
 
-          <button type="submit" className="btn btn-primary" style={{ borderRadius: '25px', marginTop: '0.5rem', gap: '0.5rem' }}>
-            {authMode === 'signin' ? <LogIn size={18} /> : <CheckCircle size={18} />}
-            <span>{authMode === 'signin' ? 'Sign In' : 'Register & Send Email'}</span>
-          </button>
-        </form>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Password</label>
+                  {authMode === 'signup' && password && (
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: strength.color }}>
+                      {strength.label} Password
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ position: 'relative' }}>
+                  <Lock size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    className="form-input"
+                    style={{ paddingLeft: '2.5rem', borderRadius: '25px', fontSize: '0.9rem' }}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+
+                {authMode === 'signup' && password && (
+                  <div style={{ width: '100%', height: '4px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{ width: strength.width, height: '100%', backgroundColor: strength.color, transition: 'all 0.3s ease' }} />
+                  </div>
+                )}
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ borderRadius: '25px', marginTop: '0.5rem', gap: '0.5rem', justifyContent: 'center' }}>
+                {authMode === 'signup' ? (
+                  <>
+                    <KeyRound size={18} />
+                    <span>Send 6-Digit Email Verification Code</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={18} />
+                    <span>Sign In</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </>
+        )}
+
+        {/* STEP 2: 6-DIGIT EMAIL OTP VERIFICATION INPUT */}
+        {step === 'otp' && (
+          <form onSubmit={handleVerifyOtpSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{
+              backgroundColor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: '12px', padding: '1rem', textAlign: 'center', fontSize: '0.85rem'
+            }}>
+              <p style={{ margin: 0, color: 'var(--text-primary)' }}>
+                Verification code sent to <strong>{email}</strong>
+              </p>
+              <span style={{ fontSize: '0.75rem', color: 'var(--secondary)', display: 'block', marginTop: '0.2rem' }}>
+                Expires in: {formatTimer(otpTimer)}
+              </span>
+            </div>
+
+            {error && (
+              <div style={{
+                padding: '0.75rem 1rem', backgroundColor: 'rgba(244, 63, 94, 0.12)',
+                border: '1px solid var(--accent-rose)', borderRadius: '8px',
+                color: 'var(--accent-rose)', fontSize: '0.8rem', fontWeight: 500
+              }}>
+                {error}
+              </div>
+            )}
+
+            {/* 6 Digit Passcode Inputs */}
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+              {otpDigits.map((digit, idx) => (
+                <input
+                  key={idx}
+                  ref={(el) => { inputRefs.current[idx] = el; }}
+                  type="text"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleDigitChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleDigitKeyDown(idx, e)}
+                  style={{
+                    width: '45px', height: '52px', borderRadius: '10px',
+                    border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)',
+                    textAlign: 'center', fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary)',
+                    outline: 'none'
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Quick Auto-fill test helper button */}
+            <button
+              type="button"
+              onClick={() => {
+                setOtpDigits(generatedOtp.split(''));
+                setError('');
+              }}
+              style={{
+                background: 'none', border: 'none', color: 'var(--secondary)', fontSize: '0.78rem',
+                cursor: 'pointer', textDecoration: 'underline', alignSelf: 'center'
+              }}
+            >
+              Auto-fill Code ({generatedOtp}) for testing
+            </button>
+
+            <button type="submit" className="btn btn-primary" style={{ borderRadius: '25px', gap: '0.5rem', justifyContent: 'center' }}>
+              <ShieldCheck size={18} />
+              <span>Verify & Complete Registration</span>
+            </button>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+              <button
+                type="button"
+                onClick={() => generateNewOtp(email)}
+                style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+              >
+                <RefreshCw size={12} />
+                <span>Resend Code</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('details')}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                Change Email
+              </button>
+            </div>
+          </form>
+        )}
 
         <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)' }} />
 
@@ -309,16 +467,16 @@ export default function Login({ onLogin }: LoginProps) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <button
               type="button"
-              onClick={() => handleQuickLogin('student', 'Student Nara')}
+              onClick={() => executeLogin('Student Nara', 'student', 'student.nara@skillnara.edu', true)}
               className="btn btn-secondary btn-sm"
               style={{ borderRadius: '20px', fontSize: '0.8rem', justifyContent: 'center' }}
             >
-              Login as Student (Student Nara)
+              Login as Student Nara (Verified ✓)
             </button>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
               <button
                 type="button"
-                onClick={() => handleQuickLogin('teacher', "Sree Ma'am")}
+                onClick={() => executeLogin("Sree Ma'am", 'teacher', 'sree@skillnara.edu', true)}
                 className="btn btn-secondary btn-sm"
                 style={{ borderRadius: '20px', fontSize: '0.8rem', justifyContent: 'center' }}
               >
@@ -326,7 +484,7 @@ export default function Login({ onLogin }: LoginProps) {
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickLogin('teacher', "Bhawna Ma'am")}
+                onClick={() => executeLogin("Bhawna Ma'am", 'teacher', 'bhawna@skillnara.edu', true)}
                 className="btn btn-secondary btn-sm"
                 style={{ borderRadius: '20px', fontSize: '0.8rem', justifyContent: 'center' }}
               >
