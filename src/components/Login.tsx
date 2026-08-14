@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Lock, User, LogIn, GraduationCap, Monitor, Mail, ShieldCheck, RefreshCw, KeyRound, Sparkles } from 'lucide-react';
+import { Lock, User, LogIn, GraduationCap, Monitor, Mail, ShieldCheck, RefreshCw, KeyRound, Sparkles, Settings } from 'lucide-react';
 import logo from '../assets/logo.svg';
+import { sendVerificationEmail, getStoredEmailConfig, saveEmailConfig } from '../services/emailService';
 
 interface LoginProps {
   onLogin: (user: { name: string; role: 'student' | 'teacher'; instructorId?: string; email?: string; isEmailVerified?: boolean }) => void;
@@ -15,11 +16,18 @@ export default function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
+  // Email Sending & Delivery Status
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailDeliveryMessage, setEmailDeliveryMessage] = useState('');
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  
+  // EmailJS Custom Config State
+  const [emailConfig, setEmailConfig] = useState(getStoredEmailConfig());
+
   // 6-Digit OTP State
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
   const [otpTimer, setOtpTimer] = useState(120);
-  const [showOtpToast, setShowOtpToast] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Password Strength Calculation
@@ -45,16 +53,27 @@ export default function Login({ onLogin }: LoginProps) {
     };
   }, [step, otpTimer]);
 
-  const generateNewOtp = (userEmail: string) => {
+  const triggerRealEmailAutomation = async (userEmail: string, nameStr: string) => {
+    setIsSendingEmail(true);
+    setError('');
+
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedOtp(code);
     setOtpDigits(['', '', '', '', '', '']);
     setOtpTimer(120);
-    setShowOtpToast(true);
-    if (!email) setEmail(userEmail);
+
+    // Call Real Email Automation API Service
+    const result = await sendVerificationEmail(userEmail, code, nameStr);
+    setIsSendingEmail(false);
+
+    if (result.success) {
+      setEmailDeliveryMessage(`📧 Verification email sent to ${userEmail}! Please check your email inbox.`);
+    } else {
+      setError(result.message);
+    }
   };
 
-  const handleDetailsSubmit = (e: React.FormEvent) => {
+  const handleDetailsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim() || (authMode === 'signup' && !email.trim())) {
       setError('Please fill in all required fields.');
@@ -63,9 +82,8 @@ export default function Login({ onLogin }: LoginProps) {
 
     if (authMode === 'signup') {
       const userEmail = email.trim() || `${username.toLowerCase().replace(/\s+/g, '')}@skillnara.edu`;
-      generateNewOtp(userEmail);
+      await triggerRealEmailAutomation(userEmail, username);
       setStep('otp');
-      setError('');
     } else {
       // Sign In directly
       executeLogin(username, role, email || `${username.toLowerCase().replace(/\s+/g, '')}@skillnara.edu`, true);
@@ -99,7 +117,7 @@ export default function Login({ onLogin }: LoginProps) {
     }
 
     if (enteredCode !== generatedOtp) {
-      setError('Incorrect 6-digit verification code. Please check the email toast or click resend.');
+      setError('Incorrect 6-digit verification code. Please check your email inbox or click Resend.');
       return;
     }
 
@@ -153,6 +171,13 @@ export default function Login({ onLogin }: LoginProps) {
     }
   };
 
+  const handleSaveEmailConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveEmailConfig(emailConfig);
+    setShowConfigModal(false);
+    alert('EmailJS settings saved! Verification emails will now route through your EmailJS account.');
+  };
+
   const formatTimer = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
@@ -169,40 +194,62 @@ export default function Login({ onLogin }: LoginProps) {
       position: 'relative'
     }}>
 
-      {/* Simulated Live Email Inbox Toast Notification Banner */}
-      {showOtpToast && (
-        <div className="animate-fade-in" style={{
-          position: 'fixed', top: '90px', right: '24px', zIndex: 9999,
-          backgroundColor: '#18191c', border: '1px solid #34d399', borderRadius: '16px',
-          padding: '1rem 1.25rem', maxWidth: '380px', width: '100%',
-          boxShadow: '0 12px 35px rgba(0,0,0,0.6), 0 0 20px rgba(52, 211, 153, 0.2)',
-          display: 'flex', flexDirection: 'column', gap: '0.5rem', color: '#ffffff'
+      {/* EmailJS Custom API Keys Modal */}
+      {showConfigModal && (
+        <div style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 12, 21, 0.85)', backdropFilter: 'blur(10px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1rem'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', fontWeight: 800, color: '#34d399' }}>
-              <Mail size={15} />
-              <span>INBOX: Skillnara Email Verification</span>
-            </div>
-            <button onClick={() => setShowOtpToast(false)} style={{ background: 'none', border: 'none', color: '#9aa0a6', cursor: 'pointer' }}>
-              ✕
-            </button>
-          </div>
-
-          <p style={{ fontSize: '0.82rem', color: '#e8eaed', margin: 0 }}>
-            Verification code sent to <strong>{email || 'your email'}</strong>:
-          </p>
-
-          <div style={{
-            backgroundColor: 'rgba(52, 211, 153, 0.15)', padding: '0.4rem 0.8rem', borderRadius: '8px',
-            fontFamily: 'monospace', fontSize: '1.25rem', fontWeight: 800, color: '#34d399',
-            letterSpacing: '0.25em', textAlign: 'center', border: '1px solid rgba(52, 211, 153, 0.4)'
+          <div className="glass-card animate-fade-in" style={{
+            maxWidth: '480px', width: '100%', padding: '2rem', borderRadius: '20px', backgroundColor: '#18191c', color: '#ffffff'
           }}>
-            {generatedOtp}
-          </div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem' }}>Configure Real EmailJS Keys</h3>
+            <p style={{ fontSize: '0.8rem', color: '#9aa0a6', marginBottom: '1.25rem' }}>
+              Connect your EmailJS.com account to send actual emails to any real recipient address.
+            </p>
 
-          <span style={{ fontSize: '0.68rem', color: '#9aa0a6', textAlign: 'right' }}>
-            Code expires in 2 minutes
-          </span>
+            <form onSubmit={handleSaveEmailConfig} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ fontSize: '0.8rem', color: '#9aa0a6' }}>EmailJS Service ID</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={emailConfig.serviceId}
+                  onChange={(e) => setEmailConfig({ ...emailConfig, serviceId: e.target.value })}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: '#ffffff' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.8rem', color: '#9aa0a6' }}>EmailJS Template ID</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={emailConfig.templateId}
+                  onChange={(e) => setEmailConfig({ ...emailConfig, templateId: e.target.value })}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: '#ffffff' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.8rem', color: '#9aa0a6' }}>EmailJS Public Key</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={emailConfig.publicKey}
+                  onChange={(e) => setEmailConfig({ ...emailConfig, publicKey: e.target.value })}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: '#ffffff' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1, borderRadius: '20px' }}>
+                  Save Keys
+                </button>
+                <button type="button" onClick={() => setShowConfigModal(false)} className="btn btn-ghost" style={{ flex: 1, borderRadius: '20px' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -224,7 +271,7 @@ export default function Login({ onLogin }: LoginProps) {
             {step === 'otp' ? 'Verify Email Code (OTP)' : (authMode === 'signin' ? 'Sign In to Skillnara' : 'Create Trusted Account')}
           </h2>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-            {step === 'otp' ? `We sent a 6-digit code to ${email}` : '2-Step Trusted Authentication System'}
+            {step === 'otp' ? `Check your email inbox at ${email}` : 'Real Email Automation & Security'}
           </p>
         </div>
 
@@ -306,15 +353,26 @@ export default function Login({ onLogin }: LoginProps) {
 
               {authMode === 'signup' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    Email Address (Sends 6-Digit OTP)
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Email Address (Sends Real Email)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowConfigModal(true)}
+                      style={{ background: 'none', border: 'none', color: 'var(--secondary)', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                    >
+                      <Settings size={12} />
+                      <span>EmailJS Settings</span>
+                    </button>
+                  </div>
+
                   <div style={{ position: 'relative' }}>
                     <Mail size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                     <input
                       type="email"
                       required
-                      placeholder="e.g. student@gmail.com"
+                      placeholder="e.g. ps6984863@gmail.com"
                       className="form-input"
                       style={{ paddingLeft: '2.5rem', borderRadius: '25px', fontSize: '0.9rem' }}
                       value={email}
@@ -354,11 +412,13 @@ export default function Login({ onLogin }: LoginProps) {
                 )}
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ borderRadius: '25px', marginTop: '0.5rem', gap: '0.5rem', justifyContent: 'center' }}>
-                {authMode === 'signup' ? (
+              <button type="submit" disabled={isSendingEmail} className="btn btn-primary" style={{ borderRadius: '25px', marginTop: '0.5rem', gap: '0.5rem', justifyContent: 'center' }}>
+                {isSendingEmail ? (
+                  <span>Dispatching Email...</span>
+                ) : authMode === 'signup' ? (
                   <>
                     <KeyRound size={18} />
-                    <span>Send 6-Digit Email Verification Code</span>
+                    <span>Send Real Verification Email</span>
                   </>
                 ) : (
                   <>
@@ -374,15 +434,26 @@ export default function Login({ onLogin }: LoginProps) {
         {/* STEP 2: 6-DIGIT EMAIL OTP VERIFICATION INPUT */}
         {step === 'otp' && (
           <form onSubmit={handleVerifyOtpSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            
+            {emailDeliveryMessage && (
+              <div style={{
+                padding: '0.75rem 1rem', backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '10px',
+                color: 'var(--accent-mint)', fontSize: '0.82rem', fontWeight: 600, textAlign: 'center'
+              }}>
+                {emailDeliveryMessage}
+              </div>
+            )}
+
             <div style={{
               backgroundColor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)',
               borderRadius: '12px', padding: '1rem', textAlign: 'center', fontSize: '0.85rem'
             }}>
               <p style={{ margin: 0, color: 'var(--text-primary)' }}>
-                Verification code sent to <strong>{email}</strong>
+                Please check your email inbox at <strong>{email}</strong>
               </p>
               <span style={{ fontSize: '0.75rem', color: 'var(--secondary)', display: 'block', marginTop: '0.2rem' }}>
-                Expires in: {formatTimer(otpTimer)}
+                OTP Expires in: {formatTimer(otpTimer)}
               </span>
             </div>
 
@@ -417,34 +488,19 @@ export default function Login({ onLogin }: LoginProps) {
               ))}
             </div>
 
-            {/* Quick Auto-fill test helper button */}
-            <button
-              type="button"
-              onClick={() => {
-                setOtpDigits(generatedOtp.split(''));
-                setError('');
-              }}
-              style={{
-                background: 'none', border: 'none', color: 'var(--secondary)', fontSize: '0.78rem',
-                cursor: 'pointer', textDecoration: 'underline', alignSelf: 'center'
-              }}
-            >
-              Auto-fill Code ({generatedOtp}) for testing
-            </button>
-
             <button type="submit" className="btn btn-primary" style={{ borderRadius: '25px', gap: '0.5rem', justifyContent: 'center' }}>
               <ShieldCheck size={18} />
-              <span>Verify & Complete Registration</span>
+              <span>Verify Code & Complete Registration</span>
             </button>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
               <button
                 type="button"
-                onClick={() => generateNewOtp(email)}
+                onClick={() => triggerRealEmailAutomation(email, username)}
                 style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
               >
                 <RefreshCw size={12} />
-                <span>Resend Code</span>
+                <span>Resend Email</span>
               </button>
               <button
                 type="button"
