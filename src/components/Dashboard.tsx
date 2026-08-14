@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Calendar, Clock, BookOpen, Tv, CheckCircle, Plus, AlertCircle, PlayCircle, Award, Video, Lock } from 'lucide-react';
+import { Calendar, Clock, BookOpen, Tv, CheckCircle, Plus, AlertCircle, PlayCircle, Award, Video, Lock, User as UserIcon } from 'lucide-react';
 import TeacherDashboard from './TeacherDashboard';
+import StudentProfile from './StudentProfile';
 
 interface EnrolledCourse {
   id: string;
@@ -58,6 +59,7 @@ export default function Dashboard({
       />
     );
   }
+  const [mainSubTab, setMainSubTab] = useState<'dashboard' | 'profile'>('dashboard');
   const [weeklyGoal, setWeeklyGoal] = useState(10);
   const [studyHours, setStudyHours] = useState(4.5);
   const [newLogHours, setNewLogHours] = useState('');
@@ -201,14 +203,38 @@ export default function Dashboard({
   const progressPercentage = Math.min(Math.round((studyHours / weeklyGoal) * 100), 100);
 
   return (
-    <div className="container animate-fade-in" style={{ padding: '3rem 0', display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+    <div className="container animate-fade-in" style={{ padding: '3rem 0', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       
-      {/* Welcome Row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h1 style={{ fontSize: '2.25rem', marginBottom: '0.25rem' }}>Okaeri, Student Nara! 👋</h1>
-          <p>Ready to level up your Japanese today? Here is your study status dashboard.</p>
-        </div>
+      {/* Student Dashboard Sub-Tab Switcher */}
+      <div style={{ display: 'flex', gap: '0.5rem', backgroundColor: 'var(--bg-tertiary)', padding: '4px', borderRadius: '25px', width: 'fit-content', border: '1px solid var(--border-color)' }}>
+        <button
+          onClick={() => setMainSubTab('dashboard')}
+          className={`btn btn-sm ${mainSubTab === 'dashboard' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ borderRadius: '20px', fontSize: '0.85rem', gap: '0.4rem' }}
+        >
+          <BookOpen size={16} />
+          <span>My Learning Dashboard</span>
+        </button>
+        <button
+          onClick={() => setMainSubTab('profile')}
+          className={`btn btn-sm ${mainSubTab === 'profile' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ borderRadius: '20px', fontSize: '0.85rem', gap: '0.4rem' }}
+        >
+          <UserIcon size={16} />
+          <span>My Profile & Achievements</span>
+        </button>
+      </div>
+
+      {mainSubTab === 'profile' ? (
+        <StudentProfile user={user} setActiveTab={setActiveTab} />
+      ) : (
+        <>
+          {/* Welcome Row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h1 style={{ fontSize: '2.25rem', marginBottom: '0.25rem' }}>Okaeri, {user.name}! 👋</h1>
+              <p>Ready to level up your Japanese today? Here is your study status dashboard.</p>
+            </div>
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -579,6 +605,8 @@ export default function Dashboard({
           <Video size={48} style={{ color: 'var(--primary)', zIndex: 2 }} />
         </div>
       </div>
+      </>
+      )}
 
       {/* Styles */}
       <style>{`
