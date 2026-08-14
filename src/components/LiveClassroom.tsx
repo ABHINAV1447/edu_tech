@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Users, Mic, MicOff, Video as VideoIcon, VideoOff, Hand, Award, Edit3, FileText, CheckCircle2, Plus, Lock, Monitor, Disc, Tv } from 'lucide-react';
+import { 
+  Send, Users, Mic, MicOff, Video as VideoIcon, VideoOff, Hand, Award, 
+  Lock, Monitor, Disc, Info, MessageSquare, PhoneOff, 
+  Copy, Pin, Smile, LayoutGrid, X, Check, Search, Tv
+} from 'lucide-react';
 
 interface ChatMessage {
   id: string;
@@ -43,14 +47,24 @@ interface LiveClassroomProps {
   setNavigationTab?: (tab: string) => void;
 }
 
+interface FloatingReaction {
+  id: number;
+  emoji: string;
+  left: number;
+}
+
 export default function LiveClassroom({ user, purchasedCourseIds = [], onTriggerCheckout, onUploadRecording, setNavigationTab }: LiveClassroomProps) {
-  const [activeTab, setActiveTab] = useState<'chat' | 'notes' | 'whiteboard'>('chat');
+  // Navigation & Side Drawer states
+  const [sidePanelTab, setSidePanelTab] = useState<'chat' | 'people' | 'info' | 'activities' | null>('chat');
+  const [stageMode, setStageMode] = useState<'presentation' | 'grid' | 'spotlight'>('presentation');
   
   // Load stream details set by dashboard
   const liveTitle = localStorage.getItem('skillnara_active_live_title') || 'Business Japanese: Keigo Honorifics';
   const liveCourse = localStorage.getItem('skillnara_active_live_course') || 'Business Japanese Etiquette';
+  const meetingCode = 'skn-jp-keigo';
+  const meetingUrl = `https://meet.google.com/skn-jp-keigo`;
 
-  // Chat message state
+  // User details
   const isTeacher = user?.role === 'teacher';
   const defaultInstructorName = isTeacher ? user.name : 'Bhawna Ma\'am (Sensei)';
   const defaultInstructorInitials = isTeacher ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2) : 'BM';
@@ -93,6 +107,287 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
+
+  // Audio/Video & MediaStream states
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCamOff, setIsCamOff] = useState(false);
+  const [handRaised, setHandRaised] = useState(false);
+  const [showCaptions, setShowCaptions] = useState(true);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
+  const [copyToast, setCopyToast] = useState(false);
+  const [peopleSearch, setPeopleSearch] = useState('');
+  const [pinnedUser, setPinnedUser] = useState<string | null>(null);
+
+  // Real Webcam MediaStream refs
+  const [hasWebcamStream, setHasWebcamStream] = useState(false);
+  const webcamStreamRef = useRef<MediaStream | null>(null);
+  const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Screen Share & Recording states
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [hasRealStream, setHasRealStream] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+
+  // Form states to publish recording
+  const [publishDescription, setPublishDescription] = useState(`Recorded live lecture covering "${liveTitle}". Key discussions included language structures, interactive quizzes, and student whiteboard activities.`);
+
+  // Real Screen Sharing MediaStream refs
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Attach webcam MediaStream when element mounts
+  useEffect(() => {
+    if (!isCamOff && webcamVideoRef.current && webcamStreamRef.current) {
+      webcamVideoRef.current.srcObject = webcamStreamRef.current;
+    }
+  }, [isCamOff, hasWebcamStream, stageMode]);
+
+  // Attach screen share MediaStream when element mounts
+  useEffect(() => {
+    if (isScreenSharing && screenVideoRef.current && screenStreamRef.current) {
+      screenVideoRef.current.srcObject = screenStreamRef.current;
+    }
+  }, [isScreenSharing, hasRealStream, stageMode]);
+
+  const handleToggleCamera = async () => {
+    if (!isCamOff) {
+      if (webcamStreamRef.current) {
+        webcamStreamRef.current.getTracks().forEach(track => track.stop());
+        webcamStreamRef.current = null;
+      }
+      setHasWebcamStream(false);
+      setIsCamOff(true);
+    } else {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+          webcamStreamRef.current = stream;
+          setHasWebcamStream(true);
+          setIsCamOff(false);
+        } else {
+          setIsCamOff(false);
+        }
+      } catch (err) {
+        console.warn('Webcam camera access error or permission denied:', err);
+        setIsCamOff(false);
+      }
+    }
+  };
+
+  const handleToggleScreenShare = async () => {
+    if (isScreenSharing) {
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+        screenStreamRef.current = null;
+      }
+      setHasRealStream(false);
+      setIsScreenSharing(false);
+    } else {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true
+          });
+          screenStreamRef.current = stream;
+          setHasRealStream(true);
+          setIsScreenSharing(true);
+
+          const videoTrack = stream.getVideoTracks()[0];
+          if (videoTrack) {
+            videoTrack.onended = () => {
+              if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach(track => track.stop());
+                screenStreamRef.current = null;
+              }
+              setHasRealStream(false);
+              setIsScreenSharing(false);
+            };
+          }
+        } else {
+          setIsScreenSharing(true);
+        }
+      } catch (err) {
+        console.warn('Screen share display media cancelled or unavailable:', err);
+        setIsScreenSharing(true);
+      }
+    }
+  };
+
+  // Recording Timer effect
+  useEffect(() => {
+    let interval: any = null;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (interval) clearInterval(interval);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
+
+  const formatDuration = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Interactive Live Poll states
+  const [pollQuestion] = useState('What is the humble (Kenjougo) form of the verb 食べる (to eat)?');
+  const [pollOptions] = useState([
+    { key: 'A', text: '召し上がる (Respectful)' },
+    { key: 'B', text: 'いただく (Humble - Correct)' },
+    { key: 'C', text: 'たべます (Polite Standard)' }
+  ]);
+  const [quizAnswer, setQuizAnswer] = useState<string | null>(null);
+
+  // Whiteboard drawing states
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [color, setColor] = useState('#ff9000');
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.beginPath();
+      ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      setIsDrawing(true);
+    }
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+      ctx.stroke();
+    }
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearCanvas = () => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  // Chat message state
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    { id: '1', sender: defaultInstructorName, avatar: defaultInstructorInitials, message: `Konnichiwa minna-san! Welcome to today's lecture on "${liveTitle}". Today we are practicing core language structures.`, time: '8:01 PM', isInstructor: true },
+    { id: '2', sender: 'John Smith', avatar: 'JS', message: 'Good evening! Excited to learn. This topic always confuses me.', time: '8:02 PM' },
+    { id: '3', sender: 'Aimi Sato', avatar: 'AS', message: 'Hello! 宜しくお願いします！ (Yoroshiku onegaishimasu)', time: '8:02 PM' },
+    { id: '4', sender: 'Kenji Suzuki', avatar: 'KS', message: 'Is it true that Sonkeigo is only for customers/seniors?', time: '8:03 PM' }
+  ]);
+  const [inputMessage, setInputMessage] = useState('');
+
+  // Live Captions Subtitles array simulation
+  const captionSubtitles = [
+    `${defaultInstructorName}: "Konnichiwa minna-san! Welcome to Business Japanese Keigo masterclass."`,
+    `${defaultInstructorName}: "Let's review the humble Kenjougo form of 食べる (itadaku)..."`,
+    `${defaultInstructorName}: "Kenjougo is used when speaking humbly about your own actions to express respect to senior clients."`,
+    `${defaultInstructorName}: "For example: 本日お電話を差し上げました (I called you today)."`
+  ];
+  const [captionIndex, setCaptionIndex] = useState(0);
+
+  useEffect(() => {
+    const captionInterval = setInterval(() => {
+      setCaptionIndex((prev) => (prev + 1) % captionSubtitles.length);
+    }, 6000);
+    return () => clearInterval(captionInterval);
+  }, [captionSubtitles.length]);
+
+  // Floating Emoji Reaction Trigger
+  const triggerEmoji = (emoji: string) => {
+    const newReaction: FloatingReaction = {
+      id: Date.now() + Math.random(),
+      emoji,
+      left: Math.floor(Math.random() * 60) + 20
+    };
+    setFloatingReactions((prev) => [...prev, newReaction]);
+    setTimeout(() => {
+      setFloatingReactions((prev) => prev.filter((r) => r.id !== newReaction.id));
+    }, 2200);
+  };
+
+  const copyMeetingLink = () => {
+    navigator.clipboard.writeText(meetingUrl);
+    setCopyToast(true);
+    setTimeout(() => setCopyToast(false), 2500);
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputMessage.trim()) return;
+
+    const newMessage: ChatMessage = {
+      id: Date.now().toString(),
+      sender: user ? user.name : 'Guest Learner',
+      avatar: user ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2) : 'GL',
+      message: inputMessage.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isInstructor: isTeacher
+    };
+
+    setMessages(prev => [...prev, newMessage]);
+    setInputMessage('');
+  };
+
+  const handleConfirmPublishRecording = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUploadRecording) {
+      onUploadRecording({
+        id: `rec-${Date.now()}`,
+        title: liveTitle,
+        course: liveCourse,
+        instructor: defaultInstructorName,
+        duration: formatDuration(recordingSeconds),
+        totalTimeSeconds: recordingSeconds,
+        uploadedDate: 'Just now',
+        views: '1',
+        description: publishDescription,
+        materials: [{ name: 'Lesson_Notes.pdf', size: '2.4 MB' }]
+      });
+    }
+    setShowPublishModal(false);
+    setRecordingSeconds(0);
+    alert(`Lecture recording "${liveTitle}" published to Recorded Archive!`);
+  };
+
+  // Participant list for Google Meet People tab
+  const participants = [
+    { name: defaultInstructorName, role: 'Instructor (Host)', avatar: defaultInstructorInitials, isHost: true, isMuted: false, hand: false },
+    { name: user ? `${user.name} (You)` : 'You', role: isTeacher ? 'Host' : 'Student', avatar: user ? user.name.substring(0, 2).toUpperCase() : 'SN', isHost: isTeacher, isMuted, hand: handRaised },
+    { name: 'Aimi Sato', role: 'Student', avatar: 'AS', isHost: false, isMuted: true, hand: true },
+    { name: 'John Smith', role: 'Student', avatar: 'JS', isHost: false, isMuted: true, hand: false },
+    { name: 'Kenji Suzuki', role: 'Student', avatar: 'KS', isHost: false, isMuted: false, hand: false },
+    { name: 'Emily Brown', role: 'Student', avatar: 'EB', isHost: false, isMuted: true, hand: false },
+    { name: 'Rohan Sharma', role: 'Student', avatar: 'RS', isHost: false, isMuted: true, hand: false },
+    { name: 'Priya Patel', role: 'Student', avatar: 'PP', isHost: false, isMuted: true, hand: false }
+  ];
+
+  const filteredParticipants = participants.filter(p => p.name.toLowerCase().includes(peopleSearch.toLowerCase()));
 
   if (!isLiveActiveState) {
     return (
@@ -202,1293 +497,1028 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
     );
   }
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: '1', sender: defaultInstructorName, avatar: defaultInstructorInitials, message: `Konnichiwa minna-san! Welcome to today's lecture on "${liveTitle}". Today we are practicing core language structures.`, time: '8:01 PM', isInstructor: true },
-    { id: '2', sender: 'John Smith', avatar: 'JS', message: 'Good evening! Excited to learn. This topic always confuses me.', time: '8:02 PM' },
-    { id: '3', sender: 'Aimi Sato', avatar: 'AS', message: 'Hello! 宜しくお願いします！ (Yoroshiku onegaishimasu)', time: '8:02 PM' },
-    { id: '4', sender: 'Kenji Suzuki', avatar: 'KS', message: 'Is it true that Sonkeigo is only for customers/seniors?', time: '8:03 PM' }
-  ]);
-  const [inputMessage, setInputMessage] = useState('');
-  
-  // Audio/Video simulation & real MediaStream states
-  const [isMuted, setIsMuted] = useState(false);
-  const [isCamOff, setIsCamOff] = useState(false);
-  const [handRaised, setHandRaised] = useState(false);
-  const [teacherView, setTeacherView] = useState<'slides' | 'face'>('slides');
-
-  // Real Webcam MediaStream states & refs (for both Teachers and Students)
-  const [hasWebcamStream, setHasWebcamStream] = useState(false);
-  const webcamStreamRef = useRef<MediaStream | null>(null);
-  const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
-
-  // Attach webcam MediaStream to webcamVideoRef element whenever video component mounts
-  useEffect(() => {
-    if (!isCamOff && webcamVideoRef.current && webcamStreamRef.current) {
-      webcamVideoRef.current.srcObject = webcamStreamRef.current;
-    }
-  }, [isCamOff, hasWebcamStream, teacherView]);
-
-  const handleToggleCamera = async () => {
-    if (!isCamOff) {
-      // Turn OFF camera and stop tracks
-      if (webcamStreamRef.current) {
-        webcamStreamRef.current.getTracks().forEach(track => track.stop());
-        webcamStreamRef.current = null;
-      }
-      setHasWebcamStream(false);
-      setIsCamOff(true);
-    } else {
-      // Turn ON camera
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false
-          });
-          webcamStreamRef.current = stream;
-          setHasWebcamStream(true);
-          setIsCamOff(false);
-        } else {
-          setIsCamOff(false);
-        }
-      } catch (err) {
-        console.warn('Webcam camera access error or permission denied:', err);
-        // Fallback to active state without crashing
-        setIsCamOff(false);
-      }
-    }
-  };
-
-  // Screen Share & Recording states
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [hasRealStream, setHasRealStream] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const [showPublishModal, setShowPublishModal] = useState(false);
-
-  // Real Screen Sharing MediaStream refs
-  const screenStreamRef = useRef<MediaStream | null>(null);
-  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
-
-  // Attach active MediaStream to screenVideoRef element whenever screen sharing renders
-  useEffect(() => {
-    if (isScreenSharing && screenVideoRef.current && screenStreamRef.current) {
-      screenVideoRef.current.srcObject = screenStreamRef.current;
-    }
-  }, [isScreenSharing, hasRealStream]);
-
-  const handleToggleScreenShare = async () => {
-    if (isScreenSharing) {
-      // Stop screen sharing
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach(track => track.stop());
-        screenStreamRef.current = null;
-      }
-      setHasRealStream(false);
-      setIsScreenSharing(false);
-    } else {
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-          const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: true
-          });
-          screenStreamRef.current = stream;
-          setHasRealStream(true);
-          setIsScreenSharing(true);
-
-          // Handle user clicking native browser "Stop sharing" floating bar
-          const videoTrack = stream.getVideoTracks()[0];
-          if (videoTrack) {
-            videoTrack.onended = () => {
-              if (screenStreamRef.current) {
-                screenStreamRef.current.getTracks().forEach(track => track.stop());
-                screenStreamRef.current = null;
-              }
-              setHasRealStream(false);
-              setIsScreenSharing(false);
-            };
-          }
-        } else {
-          setIsScreenSharing(true);
-        }
-      } catch (err) {
-        console.warn('Screen share display media cancelled or unavailable:', err);
-        // Fallback to simulated workspace view if user cancels browser prompt
-        setIsScreenSharing(true);
-      }
-    }
-  };
-
-  // Form states to publish recording
-  const [publishDescription, setPublishDescription] = useState(`Recorded live lecture covering "${liveTitle}". Key discussions included language structures, interactive quizzes, and student whiteboard activities.`);
-  const [publishMaterials, setPublishMaterials] = useState('Lesson_Notes.pdf');
-
-  // Recording Timer effect
-  useEffect(() => {
-    let interval: any = null;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingSeconds((prev) => prev + 1);
-      }, 1000);
-    } else {
-      if (interval) clearInterval(interval);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRecording]);
-
-  const formatDuration = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Interactive Live Poll states
-  const [pollQuestion, setPollQuestion] = useState('What is the humble (Kenjougo) form of the verb 食べる (to eat)?');
-  const [pollOptions, setPollOptions] = useState([
-    { key: 'A', text: '召し上がる (Respectful)' },
-    { key: 'B', text: 'いただく (Humble - Correct)' },
-    { key: 'C', text: 'たべます (Polite Standard)' }
-  ]);
-  const [pollCorrectKey, setPollCorrectKey] = useState('B');
-  const [pollPushed, setPollPushed] = useState(true);
-  const [quizAnswer, setQuizAnswer] = useState<string | null>(null);
-  const [quizSubmitted, setQuizSubmitted] = useState(false);
-  const [voteCounts, setVoteCounts] = useState([15, 81, 4]); // Percentage results
-
-  // Custom Poll Creator Form (Teacher only)
-  const [customQuestion, setCustomQuestion] = useState('');
-  const [customOptA, setCustomOptA] = useState('');
-  const [customOptB, setCustomOptB] = useState('');
-  const [customOptC, setCustomOptC] = useState('');
-  const [customCorrect, setCustomCorrect] = useState('A');
-
-  // Notes state
-  const [notes, setNotes] = useState(() => {
-    return localStorage.getItem('skillnara_live_notes') || 'Jot down your class notes here...\n\n- Keigo represents polite speech.\n- Sonkeigo (Respectful): Used for actions of others.\n- Kenjougo (Humble): Used for my actions.';
-  });
-
-  // Whiteboard drawing states
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [color, setColor] = useState('#ff9000');
-  const [brushSize, setBrushSize] = useState(5);
-
-  // Auto-save notes
-  useEffect(() => {
-    localStorage.setItem('skillnara_live_notes', notes);
-  }, [notes]);
-
-  // Whiteboard drawing functions
-  useEffect(() => {
-    if (activeTab === 'whiteboard' && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-      }
-    }
-  }, [activeTab]);
-
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.beginPath();
-      ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = brushSize;
-      setIsDrawing(true);
-    }
-  };
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-      ctx.stroke();
-    }
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-
-  const clearCanvas = () => {
-    if (!canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-  };
-
-  // Simulated live comments feed
-  useEffect(() => {
-    const simulatedComments = [
-      { sender: 'John Smith', message: 'Ah, I see! So いただく is for my own actions, like eating or receiving.' },
-      { sender: 'Aimi Sato', message: 'What is the Sonkeigo for "to say" (iu)?' },
-      { sender: defaultInstructorName, message: 'The Sonkeigo for iu (言う) is おっしゃる (ossharu). For example: 先生がおっしゃいました (The teacher said).', isInstructor: true },
-      { sender: 'Emily Brown', message: 'Osharu! Yes, I heard it in anime before.' },
-      { sender: 'Kenji Suzuki', message: 'Oh, this slide is super helpful. I am saving this in my notes.' }
-    ];
-
-    let index = 0;
-    const interval = setInterval(() => {
-      if (index < simulatedComments.length) {
-        const comment = simulatedComments[index];
-        // Skip teacher comment if user is teacher (to avoid duplication)
-        if (comment.isInstructor && isTeacher) {
-          index++;
-          return;
-        }
-
-        const newMsg: ChatMessage = {
-          id: Date.now().toString() + index,
-          sender: comment.isInstructor ? defaultInstructorName : comment.sender,
-          avatar: comment.isInstructor ? defaultInstructorInitials : comment.sender.substring(0, 2),
-          message: comment.message,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isInstructor: comment.isInstructor
-        };
-        setMessages(prev => [...prev, newMsg]);
-        index++;
-      }
-    }, 15000); // add a new chat comment every 15s
-
-    return () => clearInterval(interval);
-  }, [isTeacher, defaultInstructorName, defaultInstructorInitials]);
-
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputMessage.trim()) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      sender: user ? `${user.name} (${isTeacher ? 'Instructor' : 'You'})` : 'Guest',
-      avatar: user ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'GS',
-      message: inputMessage,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isInstructor: isTeacher
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    const userQuery = inputMessage;
-    setInputMessage('');
-
-    // Teacher responds to Student query after 1.8s (Only if user is a student)
-    if (!isTeacher) {
-      setTimeout(() => {
-        let teacherReply = 'Thank you for contributing! Keep up the good work.';
-        if (userQuery.toLowerCase().includes('?') || userQuery.toLowerCase().includes('how') || userQuery.toLowerCase().includes('what')) {
-          teacherReply = 'Excellent question! We separate respect into Sonkeigo (elevating the listener) and Kenjougo (lowering ourselves). We will cover this in detail in the next slide.';
-        } else if (userQuery.toLowerCase().includes('difficult') || userQuery.toLowerCase().includes('hard')) {
-          teacherReply = 'Keigo can be challenging, but practicing these everyday dialogues makes it natural. Let\'s practice together!';
-        }
-
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          sender: defaultInstructorName,
-          avatar: defaultInstructorInitials,
-          message: teacherReply,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isInstructor: true
-        }]);
-      }, 1800);
-    }
-  };
-
-  // Push new poll (Teacher only)
-  const handlePushPoll = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customQuestion.trim() || !customOptA.trim() || !customOptB.trim()) {
-      alert('Please fill out the question and at least two options.');
-      return;
-    }
-
-    setPollQuestion(customQuestion);
-    setPollOptions([
-      { key: 'A', text: customOptA },
-      { key: 'B', text: customOptB },
-      { key: 'C', text: customOptC || 'None of the above' }
-    ]);
-    setPollCorrectKey(customCorrect);
-    setPollPushed(true);
-    setQuizSubmitted(false);
-    setQuizAnswer(null);
-
-    // Simulate real-time student voting
-    setVoteCounts([0, 0, 0]);
-    let counts = [0, 0, 0];
-    let totalVotes = 0;
-    
-    const interval = setInterval(() => {
-      if (totalVotes < 120) {
-        // Distribute votes: correct answer gets highest weight
-        const rand = Math.random();
-        if (rand < 0.6) {
-          const index = customCorrect === 'A' ? 0 : customCorrect === 'B' ? 1 : 2;
-          counts[index]++;
-        } else {
-          const index = Math.random() < 0.5 ? 0 : 2;
-          counts[index]++;
-        }
-        totalVotes++;
-        
-        // Calculate percentages
-        const sum = counts[0] + counts[1] + counts[2];
-        setVoteCounts([
-          Math.round((counts[0] / sum) * 100),
-          Math.round((counts[1] / sum) * 100),
-          Math.round((counts[2] / sum) * 100)
-        ]);
-      } else {
-        clearInterval(interval);
-      }
-    }, 40);
-  };
-
   return (
-    <div className="container animate-fade-in" style={{ padding: '2rem 0', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div style={{
+      width: '100%',
+      minHeight: 'calc(100vh - 70px)',
+      backgroundColor: '#18191c',
+      color: '#ffffff',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+      overflow: 'hidden'
+    }} className="google-meet-viewport">
       
-      {/* 1. Header Details */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{
-              backgroundColor: 'var(--accent-rose)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 800,
-              padding: '0.2rem 0.5rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em'
-            }}>
-              Live Broadcast
-            </span>
-            <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-              <Users size={14} />
-              243 students attending
-            </span>
-          </div>
-          <h2 style={{ fontSize: '1.75rem', marginTop: '0.25rem' }}>{liveTitle}</h2>
-          <p style={{ fontSize: '0.9rem' }}>{liveCourse} • Hosted by {defaultInstructorName}</p>
+      {/* Toast Notification */}
+      {copyToast && (
+        <div style={{
+          position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)',
+          backgroundColor: '#323232', color: '#ffffff', padding: '0.6rem 1.2rem',
+          borderRadius: '25px', fontSize: '0.85rem', fontWeight: 600,
+          boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', gap: '0.5rem'
+        }}>
+          <Check size={16} color="#10b981" />
+          <span>Meeting link copied to clipboard</span>
         </div>
-
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            onClick={() => setTeacherView(teacherView === 'slides' ? 'face' : 'slides')}
-            className="btn btn-secondary btn-sm"
-            style={{ borderRadius: '20px' }}
-          >
-            Switch View ({teacherView === 'slides' ? 'Instructor Face' : 'Lecture Slides'})
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Main Live Classroom Section */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: '1.5rem' }} className="classroom-grid">
-        
-        {/* Left Column: Video & Controls */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          
-          {/* Simulated Video Player Box */}
-          <div className="glass-card" style={{
-            position: 'relative',
-            aspectRatio: '16/9',
-            backgroundColor: '#0c0a0f',
-            borderRadius: '16px',
-            overflow: 'hidden',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '2px solid var(--border-color)',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)'
-          }}>
-            
-            {/* If Teacher is sharing SLIDES */}
-            {isScreenSharing ? (
-              hasRealStream && screenStreamRef.current ? (
-                <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <video
-                    ref={screenVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                  />
-                </div>
-              ) : (
-                // Teacher Screen Share View simulation (fallback)
-                <div style={{
-                  padding: '3.5rem 1.5rem 1.5rem 1.5rem', color: '#ffffff', width: '100%', height: '100%',
-                  display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                  background: 'linear-gradient(135deg, #1e1e1e 0%, #0d0d0d 100%)',
-                  fontFamily: 'monospace', fontSize: '0.8rem'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem', color: '#a3a3a3' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary)' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary)', animation: 'pulse-slow 1s infinite alternate' }}></span>
-                      Screen Share: Workspace Preview
-                    </span>
-                    <span>VS Code - skillnara_workspace</span>
-                  </div>
-                  
-                  {/* Simulated IDE Code content */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', fontFamily: 'monospace', color: '#f8f8f2', lineHeight: '1.4', margin: 'auto 0', paddingLeft: '1rem' }}>
-                    <p style={{ color: '#75715e' }}>// Simulated Code Editor</p>
-                    <p><span style={{ color: '#f92672' }}>import</span> React, {'{'} useState {'}'} <span style={{ color: '#f92672' }}>from</span> <span style={{ color: '#e6db74' }}>'react'</span>;</p>
-                    <p><span style={{ color: '#66d9ef' }}>function</span> <span style={{ color: '#a6e22e' }}>KeigoEtiquette</span>() {'{'}</p>
-                    <p>&nbsp;&nbsp;<span style={{ color: '#66d9ef' }}>const</span> [status, setStatus] = <span style={{ color: '#a6e22e' }}>useState</span>(<span style={{ color: '#e6db74' }}>"polite"</span>);</p>
-                    <p>&nbsp;&nbsp;<span style={{ color: '#f92672' }}>return</span> (</p>
-                    <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>div</span> className=<span style={{ color: '#e6db74' }}>"keigo-container"</span>&gt;</p>
-                    <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>h3</span>&gt;Humble Verb: いただく (itadaku) - {'{'}status{'}'}&lt;/<span style={{ color: '#f92672' }}>h3</span>&gt;</p>
-                    <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span style={{ color: '#f92672' }}>div</span>&gt;</p>
-                    <p>&nbsp;&nbsp;);</p>
-                    <p>{'}'}</p>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#75715e', fontSize: '0.7rem' }}>
-                    <span>Ln 12, Col 24</span>
-                    <span>UTF-8</span>
-                    <span>TypeScript React</span>
-                  </div>
-                </div>
-              )
-            ) : teacherView === 'slides' ? (
-              <div style={{
-                padding: '2.5rem', color: '#ffffff', width: '100%', height: '100%',
-                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                background: 'linear-gradient(135deg, #07253b 0%, #02121d 100%)',
-                fontFamily: 'var(--font-sans)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.75rem' }}>
-                  <span style={{ fontSize: '0.9rem', color: 'var(--primary)', fontWeight: 600 }}>SKILLNARA LIVE CLASSROOM</span>
-                  <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>Slide 3/10</span>
-                </div>
-
-                <div style={{ margin: 'auto 0' }}>
-                  <h3 style={{ fontSize: '1.85rem', color: '#ffffff', marginBottom: '1rem' }}>Language Structuring Slide</h3>
-                  
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: '1fr 1.2fr 1.2fr', gap: '0.75rem',
-                    backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: '8px', padding: '1rem',
-                    fontSize: '0.9rem', border: '1px solid rgba(255,255,255,0.1)'
-                  }}>
-                    {/* Header */}
-                    <div style={{ fontWeight: 700, color: 'var(--primary)' }}>Concept/Word</div>
-                    <div style={{ fontWeight: 700, color: '#f472b6' }}>Structure A</div>
-                    <div style={{ fontWeight: 700, color: 'var(--accent-mint)' }}>Structure B</div>
-                    
-                    {/* Row 1 */}
-                    <div>食べる / 飲む (eat / drink)</div>
-                    <div style={{ color: '#f472b6' }}>召し上がる (Sonkeigo)</div>
-                    <div style={{ color: '#34d399' }}>いただく (Kenjougo)</div>
-                    
-                    {/* Row 2 */}
-                    <div>行く / 来る (go / come)</div>
-                    <div style={{ color: '#f472b6' }}>いらっしゃる</div>
-                    <div style={{ color: '#34d399' }}>参る (mairu)</div>
-
-                    {/* Row 3 */}
-                    <div>言う (say)</div>
-                    <div style={{ color: '#f472b6' }}>おっしゃる</div>
-                    <div style={{ color: '#34d399' }}>申す (mousu)</div>
-                  </div>
-                </div>
-
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', opacity: 0.8, display: 'flex', justifyContent: 'space-between' }}>
-                  <span>* Whiteboard slides are cast to all student screens in real-time.</span>
-                  <span>* Active Instructor: {defaultInstructorName}</span>
-                </div>
-              </div>
-            ) : (
-              // Teacher face video stream container
-              <div style={{
-                position: 'relative', width: '100%', height: '100%',
-                background: 'radial-gradient(circle, #0a2538 0%, #020c15 100%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden'
-              }}>
-                {!isCamOff ? (
-                  hasWebcamStream && webcamStreamRef.current ? (
-                    <video
-                      ref={webcamVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                      <div style={{
-                        width: '150px', height: '150px', borderRadius: '50%',
-                        background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#ffffff', fontSize: '2.5rem', fontWeight: 800,
-                        boxShadow: 'var(--primary-glow) 0 10px 40px'
-                      }}>
-                        {defaultInstructorInitials}
-                      </div>
-                      <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)' }}>
-                        Camera Active • {defaultInstructorName}
-                      </div>
-                    </div>
-                  )
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
-                    <VideoOff size={48} color="var(--accent-rose)" />
-                    <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>Camera Turned Off</span>
-                  </div>
-                )}
-                
-                <div style={{
-                  position: 'absolute', bottom: '1rem', left: '1rem',
-                  backgroundColor: 'rgba(0,0,0,0.6)', padding: '0.35rem 0.75rem', borderRadius: '4px',
-                  fontSize: '0.8rem', color: '#ffffff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem'
-                }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isCamOff ? 'var(--accent-rose)' : '#10b981' }}></span>
-                  {defaultInstructorName} ({isCamOff ? 'Cam Off' : 'Webcam Live'})
-                </div>
-              </div>
-            )}
-
-            {/* Corner student webcam widget (for students) */}
-            {!isTeacher && (
-              <div style={{
-                position: 'absolute', top: '1rem', right: '1rem',
-                width: '120px', height: '80px', borderRadius: '10px',
-                backgroundColor: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(255,255,255,0.15)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden', boxShadow: '0 8px 16px rgba(0,0,0,0.4)', zIndex: 20
-              }}>
-                {!isCamOff ? (
-                  hasWebcamStream && webcamStreamRef.current ? (
-                    <video
-                      ref={webcamVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                      <div style={{
-                        width: '28px', height: '28px', borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #10b981 0%, #6366f1 100%)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.65rem', color: '#ffffff', fontWeight: 700
-                      }}>
-                        SN
-                      </div>
-                    </div>
-                  )
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem', color: 'var(--accent-rose)' }}>
-                    <VideoOff size={18} />
-                    <span style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.6)' }}>Cam Off</span>
-                  </div>
-                )}
-
-                <div style={{
-                  position: 'absolute', bottom: '3px', left: '6px',
-                  fontSize: '0.55rem', color: '#ffffff', fontWeight: 600,
-                  backgroundColor: 'rgba(0,0,0,0.6)', padding: '1px 4px', borderRadius: '3px'
-                }}>
-                  You {isCamOff ? '(Off)' : '(Cam)'}
-                </div>
-              </div>
-            )}
-
-            {/* Simulated Live indicator & status badges */}
-            <div style={{
-              position: 'absolute', top: '1rem', left: '1rem',
-              display: 'flex', alignItems: 'center', gap: '0.6rem',
-              zIndex: 15
-            }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '0.4rem',
-                backgroundColor: 'rgba(239, 68, 68, 0.9)', padding: '0.25rem 0.6rem',
-                borderRadius: '4px', color: '#ffffff', fontSize: '0.75rem', fontWeight: 800,
-                textTransform: 'uppercase', letterSpacing: '0.05em'
-              }}>
-                <span style={{ width: '6px', height: '6px', backgroundColor: '#ffffff', borderRadius: '50%', display: 'inline-block', animation: 'pulse-slow 1s infinite alternate' }}></span>
-                Live Broadcast
-              </div>
-
-              {isScreenSharing && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '0.4rem',
-                  backgroundColor: 'rgba(59, 130, 246, 0.9)', padding: '0.25rem 0.6rem',
-                  borderRadius: '4px', color: '#ffffff', fontSize: '0.75rem', fontWeight: 800,
-                  border: '1px solid rgba(59, 130, 246, 0.4)'
-                }}>
-                  <Monitor size={13} />
-                  <span>{hasRealStream ? 'Sharing Live Screen' : 'Screen Share Active'}</span>
-                </div>
-              )}
-
-              {isRecording && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '0.4rem',
-                  backgroundColor: 'rgba(0, 0, 0, 0.75)', padding: '0.25rem 0.6rem',
-                  borderRadius: '4px', color: '#f43f5e', fontSize: '0.75rem', fontWeight: 800,
-                  border: '1px solid rgba(244, 63, 94, 0.3)'
-                }}>
-                  <span style={{ width: '6.5px', height: '6.5px', backgroundColor: '#f43f5e', borderRadius: '50%', display: 'inline-block', animation: 'pulse-slow 0.8s infinite alternate' }}></span>
-                  <span>REC {formatDuration(recordingSeconds)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Action Bar / Controls */}
-          <div className="glass-card" style={{
-            padding: '0.75rem 1.5rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={() => setIsMuted(!isMuted)}
-                className={`btn btn-sm ${isMuted ? 'btn-secondary' : 'btn-ghost'}`}
-                style={{
-                  borderRadius: '50%', width: '40px', height: '40px', padding: 0,
-                  border: isMuted ? '1px solid var(--accent-rose)' : '1px solid var(--border-color)',
-                  color: isMuted ? 'var(--accent-rose)' : 'inherit'
-                }}
-                title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
-              >
-                {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
-              </button>
-              
-              <button
-                onClick={handleToggleCamera}
-                className={`btn btn-sm ${isCamOff ? 'btn-secondary' : 'btn-ghost'}`}
-                style={{
-                  borderRadius: '50%', width: '40px', height: '40px', padding: 0,
-                  border: isCamOff ? '1px solid var(--accent-rose)' : '1px solid var(--border-color)',
-                  color: isCamOff ? 'var(--accent-rose)' : 'inherit'
-                }}
-                title={isCamOff ? 'Turn camera ON' : 'Turn camera OFF'}
-              >
-                {isCamOff ? <VideoOff size={18} /> : <VideoIcon size={18} />}
-              </button>
-
-              {isTeacher && (
-                <>
-                  <button
-                    onClick={handleToggleScreenShare}
-                    className={`btn btn-sm ${isScreenSharing ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{
-                      borderRadius: '50%', width: '40px', height: '40px', padding: 0,
-                      border: isScreenSharing ? '1px solid var(--primary)' : '1px solid var(--border-color)',
-                      color: isScreenSharing ? 'var(--primary)' : 'inherit'
-                    }}
-                    title={isScreenSharing ? 'Stop sharing screen' : 'Share your screen live'}
-                  >
-                    <Monitor size={18} />
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (isRecording) {
-                        setIsRecording(false);
-                        setShowPublishModal(true);
-                      } else {
-                        setRecordingSeconds(0);
-                        setIsRecording(true);
-                      }
-                    }}
-                    className={`btn btn-sm ${isRecording ? 'btn-secondary' : 'btn-ghost'}`}
-                    style={{
-                      borderRadius: '50%', width: '40px', height: '40px', padding: 0,
-                      border: isRecording ? '1px solid var(--accent-rose)' : '1px solid var(--border-color)',
-                      color: isRecording ? 'var(--accent-rose)' : 'inherit'
-                    }}
-                    title={isRecording ? 'Stop recording lecture' : 'Start recording lecture'}
-                  >
-                    <Disc size={18} style={{ animation: isRecording ? 'pulse-slow 1s infinite alternate' : 'none' }} />
-                  </button>
-                </>
-              )}
-            </div>
-
-            {isTeacher ? (
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to end this live broadcast? All students will be disconnected.')) {
-                    localStorage.setItem('skillnara_live_class_active', 'false');
-                    localStorage.removeItem('skillnara_active_live_title');
-                    localStorage.removeItem('skillnara_active_live_course');
-                    if (screenStreamRef.current) {
-                      screenStreamRef.current.getTracks().forEach(track => track.stop());
-                      screenStreamRef.current = null;
-                    }
-                    setIsScreenSharing(false);
-                    setIsRecording(false);
-                    setIsLiveActiveState(false);
-                  }
-                }}
-                className="btn btn-primary btn-sm"
-                style={{
-                  borderRadius: '20px',
-                  backgroundColor: 'var(--accent-rose)'
-                }}
-              >
-                <span>End Broadcast</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => setHandRaised(!handRaised)}
-                className={`btn btn-sm ${handRaised ? 'btn-primary' : 'btn-secondary'}`}
-                style={{
-                  borderRadius: '20px',
-                  borderColor: handRaised ? 'transparent' : 'var(--border-color)',
-                  backgroundColor: handRaised ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                  color: handRaised ? '#000000' : 'var(--text-primary)'
-                }}
-              >
-                <Hand size={16} />
-                <span>{handRaised ? 'Hand Raised!' : 'Raise Hand'}</span>
-              </button>
-            )}
-
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {isRecording ? 'Recording live stream...' : 'Latency: 12ms • Status: Excellent'}
-            </span>
-          </div>
-
-          {/* Quick interactive Live Poll widget */}
-          <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
-              <Award size={18} />
-              <span style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase' }}>Active Classroom Poll</span>
-            </div>
-            
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>
-              Question: {pollQuestion}
-            </h4>
-
-            {/* If Teacher, they always see the results breakdown */}
-            {isTeacher ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div style={{
-                  padding: '0.5rem 1rem', borderRadius: '8px',
-                  backgroundColor: 'rgba(52, 211, 153, 0.12)',
-                  border: '1px solid var(--accent-mint)',
-                  fontSize: '0.85rem'
-                }}>
-                  <span>Correct Key Answer: Option <strong>{pollCorrectKey}</strong></span>
-                </div>
-                
-                {/* Simulated Poll Results */}
-                <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Real-Time Student Votes:</span>
-                  {pollOptions.map((bar, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.8rem' }}>
-                      <span style={{ width: '180px', flexShrink: 0 }}>{bar.key}) {bar.text}</span>
-                      <div style={{ flex: 1, height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div style={{ width: `${voteCounts[i]}%`, height: '100%', backgroundColor: bar.key === pollCorrectKey ? 'var(--accent-mint)' : 'var(--text-muted)' }}></div>
-                      </div>
-                      <span style={{ width: '30px', textAlign: 'right', fontWeight: 600 }}>{voteCounts[i]}%</span>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={() => setPollPushed(false)}
-                  className="btn btn-secondary btn-sm"
-                  style={{ alignSelf: 'flex-start', borderRadius: '20px', marginTop: '0.5rem' }}
-                >
-                  Create Another Poll
-                </button>
-              </div>
-            ) : (
-              // Student View
-              !quizSubmitted ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {pollOptions.map((opt) => (
-                    <label
-                      key={opt.key}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '0.75rem',
-                        padding: '0.75rem 1rem', border: '1px solid var(--border-color)',
-                        borderRadius: '8px', cursor: 'pointer', transition: 'all 0.15s ease',
-                        backgroundColor: quizAnswer === opt.key ? 'var(--primary-glow)' : 'transparent',
-                        borderColor: quizAnswer === opt.key ? 'var(--primary)' : 'var(--border-color)'
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="live-poll"
-                        value={opt.key}
-                        checked={quizAnswer === opt.key}
-                        onChange={() => setQuizAnswer(opt.key)}
-                        style={{ accentColor: 'var(--primary)' }}
-                      />
-                      <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{opt.key}) {opt.text}</span>
-                    </label>
-                  ))}
-                  
-                  <button
-                    disabled={!quizAnswer}
-                    onClick={() => setQuizSubmitted(true)}
-                    className="btn btn-primary btn-sm"
-                    style={{ alignSelf: 'flex-end', borderRadius: '20px', marginTop: '0.5rem' }}
-                  >
-                    Submit Answer
-                  </button>
-                </div>
-              ) : (
-                <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <div style={{
-                    padding: '0.75rem 1rem', borderRadius: '8px',
-                    backgroundColor: quizAnswer === pollCorrectKey ? 'rgba(52, 211, 153, 0.12)' : 'rgba(244, 63, 94, 0.12)',
-                    border: quizAnswer === pollCorrectKey ? '1px solid var(--accent-mint)' : '1px solid var(--accent-rose)',
-                    fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem'
-                  }}>
-                    <CheckCircle2 size={16} style={{ color: quizAnswer === pollCorrectKey ? 'var(--accent-mint)' : 'var(--accent-rose)' }} />
-                    <span>
-                      {quizAnswer === pollCorrectKey ? 'Correct answer!' : `Oops! Option ${pollCorrectKey} is the correct answer.`}
-                    </span>
-                  </div>
-
-                  {/* Simulated Poll Results */}
-                  <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Class Poll Breakdown:</span>
-                    {pollOptions.map((bar, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.8rem' }}>
-                        <span style={{ width: '180px', flexShrink: 0 }}>{bar.key}) {bar.text}</span>
-                        <div style={{ flex: 1, height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
-                          <div style={{ width: `${voteCounts[i]}%`, height: '100%', backgroundColor: bar.key === pollCorrectKey ? 'var(--accent-mint)' : 'var(--text-muted)' }}></div>
-                        </div>
-                        <span style={{ width: '30px', textAlign: 'right', fontWeight: 600 }}>{voteCounts[i]}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Tabbed Chat/Notes/Whiteboard */}
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '500px' }}>
-          {/* Tab Selector */}
-          <div className="glass-card" style={{
-            padding: '0.25rem',
-            display: 'flex',
-            gap: '0.25rem',
-            borderRadius: '12px 12px 0 0',
-            borderBottom: 'none'
-          }}>
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`btn btn-sm ${activeTab === 'chat' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ flex: 1, borderRadius: '8px', fontSize: '0.8rem', gap: '0.3rem' }}
-            >
-              <Users size={14} />
-              <span>Live Chat</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('notes')}
-              className={`btn btn-sm ${activeTab === 'notes' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ flex: 1, borderRadius: '8px', fontSize: '0.8rem', gap: '0.3rem' }}
-            >
-              <FileText size={14} />
-              <span>{isTeacher ? 'Lesson Plan' : 'My Notes'}</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('whiteboard')}
-              className={`btn btn-sm ${activeTab === 'whiteboard' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ flex: 1, borderRadius: '8px', fontSize: '0.8rem', gap: '0.3rem' }}
-            >
-              <Edit3 size={14} />
-              <span>Whiteboard</span>
-            </button>
-          </div>
-
-          {/* Tab Body */}
-          <div className="glass-card" style={{
-            flex: 1,
-            borderRadius: '0 0 16px 16px',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            backgroundColor: 'var(--bg-secondary)',
-            height: '100%'
-          }}>
-            
-            {/* T1: Live Chat */}
-            {activeTab === 'chat' && (
-              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', flex: 1 }}>
-                {/* Message Scroll Panel */}
-                <div style={{
-                  padding: '1.25rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '1rem',
-                  overflowY: 'auto',
-                  flex: 1,
-                  maxHeight: '400px'
-                }}>
-                  {messages.map((msg) => (
-                    <div key={msg.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                      <div style={{
-                        width: '32px', height: '32px', borderRadius: '50%',
-                        background: msg.isInstructor ? 'linear-gradient(135deg, var(--secondary) 0%, #f43f5e 100%)' : 'var(--bg-tertiary)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: msg.isInstructor ? '#ffffff' : 'var(--text-primary)',
-                        fontWeight: 600, fontSize: '0.75rem', flexShrink: 0
-                      }}>
-                        {msg.avatar}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: msg.isInstructor ? 'var(--secondary)' : 'var(--text-primary)' }}>
-                            {msg.sender}
-                          </span>
-                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{msg.time}</span>
-                        </div>
-                        <p style={{
-                          fontSize: '0.85rem', color: 'var(--text-secondary)',
-                          backgroundColor: msg.isInstructor ? 'rgba(236,72,153,0.06)' : 'transparent',
-                          padding: msg.isInstructor ? '0.25rem 0.5rem' : 0,
-                          borderRadius: '4px'
-                        }}>
-                          {msg.message}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Input Text Form */}
-                <form onSubmit={handleSendMessage} style={{
-                  padding: '1rem', borderTop: '1px solid var(--border-color)',
-                  display: 'flex', gap: '0.5rem', backgroundColor: 'var(--bg-tertiary)'
-                }}>
-                  <input
-                    type="text"
-                    placeholder={isTeacher ? "Message the classroom..." : "Ask Sensei a question..."}
-                    className="form-input"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    style={{ borderRadius: '20px', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                  />
-                  <button type="submit" className="btn btn-primary" style={{
-                    width: '38px', height: '38px', borderRadius: '50%', padding: 0, flexShrink: 0
-                  }}>
-                    <Send size={16} />
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* T2: Study Notes */}
-            {activeTab === 'notes' && (
-              <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                  {isTeacher ? 'Write details of class schedule / objectives.' : 'Auto-saved notes. Syncs with your dashboard!'}
-                </span>
-                <textarea
-                  className="form-input"
-                  style={{
-                    flex: 1, resize: 'none', fontFamily: 'monospace',
-                    fontSize: '0.85rem', padding: '1rem', borderRadius: '8px',
-                    height: '350px'
-                  }}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                ></textarea>
-              </div>
-            )}
-
-            {/* T3: Interactive Whiteboard */}
-            {activeTab === 'whiteboard' && (
-              <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%', flex: 1 }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  {isTeacher ? 'Draw below to broadcast slides drawings to students live!' : 'Use this scratchpad to practice drawing Kanji stroke order!'}
-                </span>
-                
-                {/* Drawing Tools */}
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-color)' }}>
-                  {['#ff9000', '#3b82f6', '#34d399', '#facc15', '#f8fafc'].map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setColor(c)}
-                      style={{
-                        width: '20px', height: '20px', borderRadius: '50%', backgroundColor: c,
-                        border: color === c ? '2px solid var(--text-primary)' : '1px solid var(--border-color)',
-                        cursor: 'pointer'
-                      }}
-                    />
-                  ))}
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>Size:</span>
-                  <input
-                    type="range" min="1" max="20"
-                    value={brushSize}
-                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                    style={{ width: '80px', accentColor: 'var(--primary)' }}
-                  />
-                  <button onClick={clearCanvas} className="btn btn-secondary btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', borderRadius: '4px' }}>
-                    Clear
-                  </button>
-                </div>
-
-                {/* Drawing Canvas */}
-                <canvas
-                  ref={canvasRef}
-                  width="350"
-                  height="280"
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  style={{
-                    backgroundColor: '#020c15',
-                    borderRadius: '8px',
-                    cursor: 'crosshair',
-                    width: '100%',
-                    height: '280px',
-                    border: '1px solid var(--border-color)'
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Left Column: Teacher Poll Creator panel (pushed to bottom under video when teacher is logged in and poll is not pushed) */}
-        {isTeacher && !pollPushed && (
-          <div className="glass-card" style={{ gridColumn: '1 / -1', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-            <h3 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--secondary)' }}>
-              <Plus size={16} />
-              <span>Create & Push a New Quiz Poll to Students</span>
-            </h3>
-
-            <form onSubmit={handlePushPoll} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Question Text</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Which particle marks direct objects?"
-                  className="form-input"
-                  value={customQuestion}
-                  onChange={(e) => setCustomQuestion(e.target.value)}
-                  style={{ fontSize: '0.85rem' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }} className="grid-responsive">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Option A</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. は (wa)"
-                    className="form-input"
-                    value={customOptA}
-                    onChange={(e) => setCustomOptA(e.target.value)}
-                    style={{ fontSize: '0.85rem' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Option B</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. を (wo)"
-                    className="form-input"
-                    value={customOptB}
-                    onChange={(e) => setCustomOptB(e.target.value)}
-                    style={{ fontSize: '0.85rem' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Option C</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. に (ni)"
-                    className="form-input"
-                    value={customOptC}
-                    onChange={(e) => setCustomOptC(e.target.value)}
-                    style={{ fontSize: '0.85rem' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Correct Option:</label>
-                  <select
-                    className="form-input"
-                    value={customCorrect}
-                    onChange={(e) => setCustomCorrect(e.target.value)}
-                    style={{ fontSize: '0.85rem', width: '80px', padding: '0.25rem 0.5rem', borderRadius: '4px' }}
-                  >
-                    <option value="A">A</option>
-                    <option value="B">B</option>
-                    <option value="C">C</option>
-                  </select>
-                </div>
-
-                <button type="submit" className="btn btn-primary btn-sm" style={{ borderRadius: '20px' }}>
-                  <span>Push Poll Live</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Publish Recording Modal */}
       {showPublishModal && (
         <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(2, 12, 21, 0.8)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '1rem'
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '1rem'
         }}>
-          <div className="glass-card animate-fade-in" style={{
-            width: '100%',
-            maxWidth: '500px',
-            padding: '2.25rem',
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.5rem'
+          <div style={{
+            backgroundColor: '#202124', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '16px', padding: '2rem', maxWidth: '500px', width: '100%', display: 'flex', flexDirection: 'column', gap: '1.25rem'
           }}>
-            <div>
-              <span className="gradient-text" style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Lecture Recording Finished
-              </span>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: 800, marginTop: '0.25rem' }}>Publish Lecture to Archive</h3>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Lecture Title</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={liveTitle}
-                  disabled
-                  style={{ fontSize: '0.9rem', borderRadius: '8px', opacity: 0.8 }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Duration</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formatDuration(recordingSeconds)}
-                    disabled
-                    style={{ fontSize: '0.9rem', borderRadius: '8px', opacity: 0.8, fontFamily: 'monospace', textAlign: 'center' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Course</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={liveCourse}
-                    disabled
-                    style={{ fontSize: '0.9rem', borderRadius: '8px', opacity: 0.8, textAlign: 'center' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Materials / Slides PDF</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Lesson_Slides_Keigo.pdf"
-                  className="form-input"
-                  value={publishMaterials}
-                  onChange={(e) => setPublishMaterials(e.target.value)}
-                  style={{ fontSize: '0.9rem', borderRadius: '8px' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Description</label>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#ffffff' }}>Publish Recorded Lecture</h3>
+            <p style={{ fontSize: '0.85rem', color: '#9aa0a6' }}>
+              Recorded session duration: <strong>{formatDuration(recordingSeconds)}</strong>. Save this lecture to the Recorded Archive so students can re-watch it anytime.
+            </p>
+            <form onSubmit={handleConfirmPublishRecording} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ fontSize: '0.8rem', color: '#8ab4f8', fontWeight: 600 }}>Lecture Summary</label>
                 <textarea
-                  className="form-input"
+                  rows={3}
                   value={publishDescription}
                   onChange={(e) => setPublishDescription(e.target.value)}
-                  style={{ fontSize: '0.9rem', borderRadius: '8px', resize: 'none', height: '80px' }}
-                ></textarea>
+                  style={{
+                    width: '100%', marginTop: '0.35rem', backgroundColor: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.65rem',
+                    color: '#ffffff', fontSize: '0.85rem', outline: 'none', resize: 'none'
+                  }}
+                />
               </div>
-            </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm('Discard this recording? It will not be saved.')) {
-                    setShowPublishModal(false);
-                    setRecordingSeconds(0);
-                  }
-                }}
-                className="btn btn-secondary"
-                style={{ borderRadius: '20px', fontSize: '0.85rem' }}
-              >
-                Discard
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => {
-                  if (onUploadRecording) {
-                    onUploadRecording({
-                      id: 'rec-live-' + Date.now(),
-                      title: liveTitle,
-                      course: liveCourse,
-                      instructor: defaultInstructorName,
-                      duration: formatDuration(recordingSeconds),
-                      totalTimeSeconds: recordingSeconds,
-                      uploadedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                      views: '1 view',
-                      description: publishDescription,
-                      materials: publishMaterials ? [{ name: publishMaterials, size: '1.2 MB' }] : []
-                    });
-                  }
-                  setShowPublishModal(false);
-                  setRecordingSeconds(0);
-                  alert('Lecture recording has been successfully published to the Recorded Archive!');
-                }}
-                className="btn btn-primary"
-                style={{ borderRadius: '20px', fontSize: '0.85rem', gap: '0.4rem' }}
-              >
-                <Disc size={14} />
-                <span>Publish to Archive</span>
-              </button>
-            </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowPublishModal(false)}
+                  style={{
+                    background: 'transparent', border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#ffffff', padding: '0.5rem 1.25rem', borderRadius: '20px', fontSize: '0.85rem'
+                  }}
+                >
+                  Discard
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    backgroundColor: '#8ab4f8', color: '#202124', border: 'none',
+                    fontWeight: 700, padding: '0.5rem 1.5rem', borderRadius: '20px', fontSize: '0.85rem'
+                  }}
+                >
+                  Publish to Archive
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
-      
-      {/* CSS queries */}
-      <style>{`
-        @media (max-width: 900px) {
-          .classroom-grid {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
+
+      {/* 1. Google Meet Top Header Bar */}
+      <header style={{
+        height: '56px',
+        padding: '0 1.25rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#202124',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        zIndex: 50
+      }}>
+        {/* Left: Meeting Title & Code */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{
+              backgroundColor: '#ea4335', color: '#ffffff', fontSize: '0.7rem', fontWeight: 800,
+              padding: '0.15rem 0.45rem', borderRadius: '3px', textTransform: 'uppercase', letterSpacing: '0.05em'
+            }}>
+              LIVE
+            </span>
+            <h1 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#ffffff', margin: 0 }}>{liveTitle}</h1>
+          </div>
+
+          <div style={{ height: '18px', width: '1px', backgroundColor: 'rgba(255,255,255,0.2)' }} />
+
+          <button
+            onClick={copyMeetingLink}
+            style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '20px', padding: '0.25rem 0.75rem', color: '#e8eaed',
+              fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer'
+            }}
+            title="Click to copy meeting link"
+          >
+            <span>{meetingCode}</span>
+            <Copy size={13} />
+          </button>
+        </div>
+
+        {/* Right: Layout Switcher, Time & Recording */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          {isRecording && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '0.4rem',
+              backgroundColor: 'rgba(234, 67, 53, 0.15)', border: '1px solid rgba(234, 67, 53, 0.4)',
+              color: '#ea4335', padding: '0.25rem 0.6rem', borderRadius: '15px', fontSize: '0.75rem', fontWeight: 700
+            }}>
+              <span style={{ width: '7px', height: '7px', backgroundColor: '#ea4335', borderRadius: '50%', animation: 'pulse-slow 0.8s infinite alternate' }} />
+              <span>REC {formatDuration(recordingSeconds)}</span>
+            </div>
+          )}
+
+          {/* Layout Mode Picker */}
+          <div style={{ display: 'flex', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '2px' }}>
+            <button
+              onClick={() => setStageMode('presentation')}
+              style={{
+                background: stageMode === 'presentation' ? '#8ab4f8' : 'transparent',
+                color: stageMode === 'presentation' ? '#202124' : '#e8eaed',
+                border: 'none', borderRadius: '18px', padding: '0.3rem 0.75rem',
+                fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
+              }}
+            >
+              Sidebar
+            </button>
+            <button
+              onClick={() => setStageMode('grid')}
+              style={{
+                background: stageMode === 'grid' ? '#8ab4f8' : 'transparent',
+                color: stageMode === 'grid' ? '#202124' : '#e8eaed',
+                border: 'none', borderRadius: '18px', padding: '0.3rem 0.75rem',
+                fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem'
+              }}
+            >
+              <LayoutGrid size={13} />
+              Grid
+            </button>
+            <button
+              onClick={() => setStageMode('spotlight')}
+              style={{
+                background: stageMode === 'spotlight' ? '#8ab4f8' : 'transparent',
+                color: stageMode === 'spotlight' ? '#202124' : '#e8eaed',
+                border: 'none', borderRadius: '18px', padding: '0.3rem 0.75rem',
+                fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
+              }}
+            >
+              Spotlight
+            </button>
+          </div>
+
+          <div style={{ fontSize: '0.85rem', color: '#9aa0a6', fontWeight: 500 }}>
+            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </div>
+      </header>
+
+      {/* 2. Main Body Stage & Collapsible Google Meet Side Drawer */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+        
+        {/* Main Stage View Area */}
+        <div style={{
+          flex: 1,
+          padding: '1rem',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+
+          {/* Floating Reaction Emojis Container */}
+          <div style={{ position: 'absolute', bottom: '80px', left: 0, right: 0, height: '240px', pointerEvents: 'none', zIndex: 100 }}>
+            {floatingReactions.map((reaction) => (
+              <div
+                key={reaction.id}
+                style={{
+                  position: 'absolute',
+                  bottom: '10px',
+                  left: `${reaction.left}%`,
+                  fontSize: '2.5rem',
+                  animation: 'floatUp 2s cubic-bezier(0.1, 0.8, 0.3, 1) forwards'
+                }}
+              >
+                {reaction.emoji}
+              </div>
+            ))}
+          </div>
+
+          {/* PRESENTATION MODE: Main Presentation Box + Side Video Tile Strip */}
+          {stageMode === 'presentation' && (
+            <div style={{ width: '100%', height: '100%', display: 'flex', gap: '1rem' }}>
+              
+              {/* Main Center Presentation Stage */}
+              <div style={{
+                flex: 1,
+                backgroundColor: '#202124',
+                borderRadius: '16px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                position: 'relative',
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {isScreenSharing ? (
+                  hasRealStream && screenStreamRef.current ? (
+                    <video
+                      ref={screenVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  ) : (
+                    <div style={{
+                      padding: '2.5rem', color: '#ffffff', width: '100%', height: '100%',
+                      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                      background: 'linear-gradient(135deg, #1e1e1e 0%, #0d0d0d 100%)',
+                      fontFamily: 'monospace', fontSize: '0.85rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', color: '#8ab4f8' }}>
+                        <span>Screen Share: {defaultInstructorName}'s Workspace</span>
+                        <span>VS Code - skillnara_workspace</span>
+                      </div>
+                      
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', color: '#f8f8f2', lineHeight: '1.5', margin: 'auto 0', paddingLeft: '1rem' }}>
+                        <p style={{ color: '#75715e' }}>// Live Keigo Code Playground</p>
+                        <p><span style={{ color: '#f92672' }}>import</span> React, {'{'} useState {'}'} <span style={{ color: '#f92672' }}>from</span> <span style={{ color: '#e6db74' }}>'react'</span>;</p>
+                        <p><span style={{ color: '#66d9ef' }}>function</span> <span style={{ color: '#a6e22e' }}>KeigoEtiquette</span>() {'{'}</p>
+                        <p>&nbsp;&nbsp;<span style={{ color: '#66d9ef' }}>const</span> [status, setStatus] = <span style={{ color: '#a6e22e' }}>useState</span>(<span style={{ color: '#e6db74' }}>"polite"</span>);</p>
+                        <p>&nbsp;&nbsp;<span style={{ color: '#f92672' }}>return</span> (</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>div</span> className=<span style={{ color: '#e6db74' }}>"keigo-container"</span>&gt;</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>h3</span>&gt;Humble Verb: いただく (itadaku) - {'{'}status{'}'}&lt;/<span style={{ color: '#f92672' }}>h3</span>&gt;</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span style={{ color: '#f92672' }}>div</span>&gt;</p>
+                        <p>&nbsp;&nbsp;);</p>
+                        <p>{'}'}</p>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#75715e', fontSize: '0.75rem' }}>
+                        <span>Ln 12, Col 24</span>
+                        <span>TypeScript React</span>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  // Default Slide Presentation View
+                  <div style={{
+                    padding: '2.5rem', color: '#ffffff', width: '100%', height: '100%',
+                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                    background: 'linear-gradient(135deg, #0f172a 0%, #020617 100%)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#8ab4f8', fontWeight: 600, letterSpacing: '0.05em' }}>SKILLNARA PRESENTATION</span>
+                      <span style={{ fontSize: '0.8rem', color: '#9aa0a6' }}>Slide 3 of 10</span>
+                    </div>
+
+                    <div style={{ margin: 'auto 0' }}>
+                      <h2 style={{ fontSize: '2rem', color: '#ffffff', marginBottom: '1.25rem', fontWeight: 700 }}>Language Structuring Masterclass</h2>
+                      
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: '1fr 1.2fr 1.2fr', gap: '0.75rem',
+                        backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '12px', padding: '1.25rem',
+                        fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.08)'
+                      }}>
+                        <div style={{ fontWeight: 700, color: '#8ab4f8' }}>Concept / Verb</div>
+                        <div style={{ fontWeight: 700, color: '#f472b6' }}>Structure A (Sonkeigo)</div>
+                        <div style={{ fontWeight: 700, color: '#34d399' }}>Structure B (Kenjougo)</div>
+                        
+                        <div>食べる / 飲む (eat / drink)</div>
+                        <div style={{ color: '#f472b6' }}>召し上がる</div>
+                        <div style={{ color: '#34d399' }}>いただく (itadaku)</div>
+                        
+                        <div>行く / 来る (go / come)</div>
+                        <div style={{ color: '#f472b6' }}>いらっしゃる</div>
+                        <div style={{ color: '#34d399' }}>参る (mairu)</div>
+
+                        <div>言う (say)</div>
+                        <div style={{ color: '#f472b6' }}>おっしゃる</div>
+                        <div style={{ color: '#34d399' }}>申す (mousu)</div>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: '0.8rem', color: '#9aa0a6', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>* Live slides cast to all student screens</span>
+                      <span>Presenter: {defaultInstructorName}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Subtitles / Closed Captions Overlay */}
+                {showCaptions && (
+                  <div style={{
+                    position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)',
+                    backgroundColor: 'rgba(0,0,0,0.85)', padding: '0.5rem 1.25rem', borderRadius: '8px',
+                    color: '#ffffff', fontSize: '0.9rem', maxWidth: '80%', textAlign: 'center',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)', zIndex: 30, border: '1px solid rgba(255,255,255,0.1)'
+                  }}>
+                    <span>{captionSubtitles[captionIndex]}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Vertical Tile Strip (Google Meet Side Participant Videos) */}
+              <div style={{
+                width: '210px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+                overflowY: 'auto'
+              }}>
+                {/* 1. Instructor Video Tile */}
+                <div style={{
+                  height: '135px',
+                  backgroundColor: '#202124',
+                  borderRadius: '12px',
+                  border: pinnedUser === 'instructor' ? '2px solid #8ab4f8' : '1px solid rgba(255,255,255,0.1)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {!isCamOff && isTeacher && hasWebcamStream && webcamStreamRef.current ? (
+                    <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{
+                      width: '45px', height: '45px', borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#ffffff', fontWeight: 700, fontSize: '1rem'
+                    }}>
+                      {defaultInstructorInitials}
+                    </div>
+                  )}
+
+                  <div style={{
+                    position: 'absolute', bottom: '6px', left: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '2px 6px', borderRadius: '4px',
+                    fontSize: '0.65rem', color: '#ffffff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem'
+                  }}>
+                    <span>{defaultInstructorName}</span>
+                  </div>
+
+                  <button
+                    onClick={() => setPinnedUser(pinnedUser === 'instructor' ? null : 'instructor')}
+                    style={{
+                      position: 'absolute', top: '6px', right: '6px',
+                      background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',
+                      width: '24px', height: '24px', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                    }}
+                  >
+                    <Pin size={12} />
+                  </button>
+                </div>
+
+                {/* 2. Student (You) Video Tile */}
+                <div style={{
+                  height: '135px',
+                  backgroundColor: '#202124',
+                  borderRadius: '12px',
+                  border: pinnedUser === 'you' ? '2px solid #8ab4f8' : '1px solid rgba(255,255,255,0.1)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {!isCamOff && !isTeacher && hasWebcamStream && webcamStreamRef.current ? (
+                    <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{
+                      width: '45px', height: '45px', borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #10b981 0%, #6366f1 100%)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#ffffff', fontWeight: 700, fontSize: '0.9rem'
+                    }}>
+                      SN
+                    </div>
+                  )}
+
+                  <div style={{
+                    position: 'absolute', bottom: '6px', left: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '2px 6px', borderRadius: '4px',
+                    fontSize: '0.65rem', color: '#ffffff', fontWeight: 600
+                  }}>
+                    You {isCamOff ? '(Cam Off)' : ''}
+                  </div>
+
+                  <div style={{
+                    position: 'absolute', bottom: '6px', right: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '3px', borderRadius: '50%'
+                  }}>
+                    {isMuted ? <MicOff size={11} color="#ea4335" /> : <Mic size={11} color="#34a853" />}
+                  </div>
+                </div>
+
+                {/* 3. Peer Student Tile: Aimi Sato */}
+                <div style={{
+                  height: '135px', backgroundColor: '#202124', borderRadius: '12px',
+                  border: '1px solid rgba(255,255,255,0.1)', position: 'relative',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <div style={{
+                    width: '42px', height: '42px', borderRadius: '50%',
+                    backgroundColor: '#ec4899', color: '#ffffff', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem'
+                  }}>
+                    AS
+                  </div>
+                  <div style={{
+                    position: 'absolute', bottom: '6px', left: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '2px 6px', borderRadius: '4px',
+                    fontSize: '0.65rem', color: '#ffffff'
+                  }}>
+                    Aimi Sato
+                  </div>
+                  <div style={{ position: 'absolute', bottom: '6px', right: '8px', backgroundColor: 'rgba(0,0,0,0.65)', padding: '3px', borderRadius: '50%' }}>
+                    <MicOff size={11} color="#ea4335" />
+                  </div>
+                </div>
+
+                {/* 4. Peer Student Tile: Kenji Suzuki */}
+                <div style={{
+                  height: '135px', backgroundColor: '#202124', borderRadius: '12px',
+                  border: '1px solid rgba(255,255,255,0.1)', position: 'relative',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <div style={{
+                    width: '42px', height: '42px', borderRadius: '50%',
+                    backgroundColor: '#f59e0b', color: '#ffffff', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem'
+                  }}>
+                    KS
+                  </div>
+                  <div style={{
+                    position: 'absolute', bottom: '6px', left: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '2px 6px', borderRadius: '4px',
+                    fontSize: '0.65rem', color: '#ffffff'
+                  }}>
+                    Kenji Suzuki
+                  </div>
+                  <div style={{ position: 'absolute', bottom: '6px', right: '8px', backgroundColor: 'rgba(0,0,0,0.65)', padding: '3px', borderRadius: '50%' }}>
+                    <Mic size={11} color="#34a853" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* GRID VIEW MODE: 6 Equal Video Cards */}
+          {stageMode === 'grid' && (
+            <div style={{
+              width: '100%', height: '100%',
+              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem'
+            }}>
+              {participants.slice(0, 6).map((p, i) => (
+                <div key={i} style={{
+                  backgroundColor: '#202124', borderRadius: '16px',
+                  border: p.isHost ? '2px solid #8ab4f8' : '1px solid rgba(255,255,255,0.1)',
+                  position: 'relative', overflow: 'hidden',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  {p.isHost && hasWebcamStream && webcamStreamRef.current ? (
+                    <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{
+                      width: '65px', height: '65px', borderRadius: '50%',
+                      background: p.isHost ? 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)' : 'rgba(255,255,255,0.1)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#ffffff', fontWeight: 700, fontSize: '1.2rem'
+                    }}>
+                      {p.avatar}
+                    </div>
+                  )}
+
+                  <div style={{
+                    position: 'absolute', bottom: '10px', left: '12px',
+                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '3px 8px', borderRadius: '6px',
+                    fontSize: '0.75rem', color: '#ffffff', fontWeight: 600
+                  }}>
+                    {p.name} {p.isHost ? '👑' : ''}
+                  </div>
+
+                  <div style={{
+                    position: 'absolute', top: '10px', right: '12px',
+                    backgroundColor: 'rgba(0,0,0,0.6)', padding: '4px', borderRadius: '50%'
+                  }}>
+                    {p.isMuted ? <MicOff size={14} color="#ea4335" /> : <Mic size={14} color="#34a853" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* SPOTLIGHT VIEW MODE */}
+          {stageMode === 'spotlight' && (
+            <div style={{
+              width: '100%', height: '100%', backgroundColor: '#202124',
+              borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)',
+              position: 'relative', overflow: 'hidden', display: 'flex',
+              alignItems: 'center', justifyContent: 'center'
+            }}>
+              {hasWebcamStream && webcamStreamRef.current ? (
+                <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{
+                    width: '140px', height: '140px', borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#ffffff', fontSize: '2.5rem', fontWeight: 800, margin: '0 auto 1rem auto'
+                  }}>
+                    {defaultInstructorInitials}
+                  </div>
+                  <h3 style={{ fontSize: '1.25rem', color: '#ffffff' }}>{defaultInstructorName} (Active Presenter)</h3>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+
+        {/* 3. Google Meet Collapsible Right Side Panel Drawer */}
+        {sidePanelTab && (
+          <aside style={{
+            width: '360px',
+            backgroundColor: '#202124',
+            borderLeft: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 40
+          }}>
+            {/* Side Panel Header */}
+            <div style={{
+              height: '56px', padding: '0 1.25rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              borderBottom: '1px solid rgba(255,255,255,0.08)'
+            }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#ffffff', margin: 0, textTransform: 'capitalize' }}>
+                {sidePanelTab === 'chat' && 'In-call Messages'}
+                {sidePanelTab === 'people' && 'People'}
+                {sidePanelTab === 'activities' && 'Activities & Polls'}
+                {sidePanelTab === 'info' && 'Meeting Details'}
+              </h3>
+              <button
+                onClick={() => setSidePanelTab(null)}
+                style={{ background: 'transparent', border: 'none', color: '#9aa0a6', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Side Panel Content Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
+              
+              {/* CHAT TAB */}
+              {sidePanelTab === 'chat' && (
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', paddingRight: '0.25rem' }}>
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.75rem', color: '#9aa0a6', textAlign: 'center' }}>
+                      Messages can be seen only by people in the call and are deleted when the call ends.
+                    </div>
+                    {messages.map((msg) => (
+                      <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: msg.isInstructor ? '#8ab4f8' : '#e8eaed' }}>
+                            {msg.sender} {msg.isInstructor ? '👑' : ''}
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: '#9aa0a6' }}>{msg.time}</span>
+                        </div>
+                        <div style={{
+                          backgroundColor: msg.isInstructor ? 'rgba(138, 180, 248, 0.1)' : 'rgba(255,255,255,0.06)',
+                          padding: '0.6rem 0.85rem', borderRadius: '8px', fontSize: '0.85rem', color: '#ffffff',
+                          border: msg.isInstructor ? '1px solid rgba(138, 180, 248, 0.2)' : 'none'
+                        }}>
+                          {msg.message}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                    <input
+                      type="text"
+                      placeholder="Send a message to everyone"
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      style={{
+                        flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '25px', padding: '0.65rem 1rem', color: '#ffffff', fontSize: '0.85rem', outline: 'none'
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      style={{
+                        backgroundColor: '#8ab4f8', color: '#202124', border: 'none',
+                        borderRadius: '50%', width: '38px', height: '38px', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                      }}
+                    >
+                      <Send size={16} />
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* PEOPLE TAB */}
+              {sidePanelTab === 'people' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={16} style={{ position: 'absolute', left: '12px', top: '10px', color: '#9aa0a6' }} />
+                    <input
+                      type="text"
+                      placeholder="Search for people"
+                      value={peopleSearch}
+                      onChange={(e) => setPeopleSearch(e.target.value)}
+                      style={{
+                        width: '100%', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+                        borderRadius: '8px', padding: '0.55rem 0.75rem 0.55rem 2.25rem', color: '#ffffff', fontSize: '0.85rem', outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#9aa0a6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    IN MEETING ({participants.length})
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {filteredParticipants.map((p, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.25rem 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <div style={{
+                            width: '32px', height: '32px', borderRadius: '50%',
+                            backgroundColor: p.isHost ? '#8ab4f8' : 'rgba(255,255,255,0.15)',
+                            color: p.isHost ? '#202124' : '#ffffff', fontWeight: 700,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem'
+                          }}>
+                            {p.avatar}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.85rem', color: '#ffffff', fontWeight: p.isHost ? 600 : 400 }}>
+                              {p.name} {p.isHost && '👑'}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: '#9aa0a6' }}>{p.role}</div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {p.hand && <Hand size={14} color="#fbbc04" />}
+                          {p.isMuted ? <MicOff size={14} color="#ea4335" /> : <Mic size={14} color="#34a853" />}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ACTIVITIES & WHITEBOARD TAB */}
+              {sidePanelTab === 'activities' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  
+                  {/* Whiteboard Tool */}
+                  <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#ffffff' }}>Collaborative Whiteboard</span>
+                      <button onClick={clearCanvas} style={{ background: 'transparent', border: 'none', color: '#ea4335', fontSize: '0.75rem', cursor: 'pointer' }}>Clear</button>
+                    </div>
+                    
+                    <canvas
+                      ref={canvasRef}
+                      width={300}
+                      height={180}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      style={{
+                        backgroundColor: '#000000', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)',
+                        cursor: 'crosshair', width: '100%'
+                      }}
+                    />
+                    
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', alignItems: 'center' }}>
+                      {['#ff9000', '#3b82f6', '#10b981', '#ec4899', '#ffffff'].map(c => (
+                        <button
+                          key={c}
+                          onClick={() => setColor(c)}
+                          style={{
+                            width: '20px', height: '20px', borderRadius: '50%', backgroundColor: c,
+                            border: color === c ? '2px solid #ffffff' : 'none', cursor: 'pointer'
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Polls Component */}
+                  <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#ffffff', marginBottom: '0.75rem' }}>Live Class Poll</div>
+                    <p style={{ fontSize: '0.8rem', color: '#e8eaed', marginBottom: '0.75rem' }}>{pollQuestion}</p>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {pollOptions.map(opt => (
+                        <button
+                          key={opt.key}
+                          onClick={() => setQuizAnswer(opt.key)}
+                          style={{
+                            textAlign: 'left', padding: '0.5rem 0.75rem', borderRadius: '6px',
+                            backgroundColor: quizAnswer === opt.key ? 'rgba(138,180,248,0.2)' : 'rgba(255,255,255,0.06)',
+                            border: quizAnswer === opt.key ? '1px solid #8ab4f8' : '1px solid rgba(255,255,255,0.1)',
+                            color: '#ffffff', fontSize: '0.8rem', cursor: 'pointer'
+                          }}
+                        >
+                          {opt.key}. {opt.text}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* MEETING DETAILS TAB */}
+              {sidePanelTab === 'info' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <div>
+                    <span style={{ fontSize: '0.75rem', color: '#9aa0a6', fontWeight: 600 }}>JOINING INFO</span>
+                    <p style={{ fontSize: '0.85rem', color: '#ffffff', margin: '0.25rem 0' }}>{meetingUrl}</p>
+                    <button
+                      onClick={copyMeetingLink}
+                      style={{
+                        backgroundColor: 'rgba(138, 180, 248, 0.1)', border: '1px solid rgba(138, 180, 248, 0.3)',
+                        borderRadius: '20px', padding: '0.4rem 1rem', color: '#8ab4f8', fontSize: '0.8rem',
+                        display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', marginTop: '0.5rem'
+                      }}
+                    >
+                      <Copy size={14} />
+                      <span>Copy joining info</span>
+                    </button>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '1rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#9aa0a6', fontWeight: 600 }}>COURSE ATTACHMENT</span>
+                    <p style={{ fontSize: '0.85rem', color: '#ffffff', margin: '0.25rem 0' }}>{liveCourse}</p>
+                    <span style={{ fontSize: '0.75rem', color: '#34a853' }}>Verified Enrollment Active</span>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </aside>
+        )}
+
+      </div>
+
+      {/* 4. Google Meet Bottom Floating Control Bar */}
+      <footer style={{
+        height: '80px',
+        backgroundColor: '#202124',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 1.5rem',
+        position: 'relative',
+        zIndex: 50
+      }}>
+        {/* Left: Meeting Name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ffffff', fontSize: '0.85rem', fontWeight: 500 }}>
+          <span>{meetingCode}</span>
+        </div>
+
+        {/* Center: Google Meet Action Icons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', position: 'relative' }}>
+          
+          {/* Microphone */}
+          <button
+            onClick={() => setIsMuted(!isMuted)}
+            style={{
+              width: '44px', height: '44px', borderRadius: '50%',
+              backgroundColor: isMuted ? '#ea4335' : 'rgba(255,255,255,0.12)',
+              border: 'none', color: '#ffffff', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', cursor: 'pointer'
+            }}
+            title={isMuted ? 'Turn on microphone' : 'Turn off microphone'}
+          >
+            {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+          </button>
+
+          {/* Camera */}
+          <button
+            onClick={handleToggleCamera}
+            style={{
+              width: '44px', height: '44px', borderRadius: '50%',
+              backgroundColor: isCamOff ? '#ea4335' : 'rgba(255,255,255,0.12)',
+              border: 'none', color: '#ffffff', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', cursor: 'pointer'
+            }}
+            title={isCamOff ? 'Turn on camera' : 'Turn off camera'}
+          >
+            {isCamOff ? <VideoOff size={20} /> : <VideoIcon size={20} />}
+          </button>
+
+          {/* Captions (CC) */}
+          <button
+            onClick={() => setShowCaptions(!showCaptions)}
+            style={{
+              width: '44px', height: '44px', borderRadius: '50%',
+              backgroundColor: showCaptions ? '#8ab4f8' : 'rgba(255,255,255,0.12)',
+              color: showCaptions ? '#202124' : '#ffffff',
+              border: 'none', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', cursor: 'pointer', fontWeight: 800, fontSize: '0.8rem'
+            }}
+            title="Turn on closed captions"
+          >
+            CC
+          </button>
+
+          {/* Emoji Reactions Palette Toggle */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              style={{
+                width: '44px', height: '44px', borderRadius: '50%',
+                backgroundColor: showEmojiPicker ? '#8ab4f8' : 'rgba(255,255,255,0.12)',
+                color: showEmojiPicker ? '#202124' : '#ffffff',
+                border: 'none', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer'
+              }}
+              title="Send a reaction"
+            >
+              <Smile size={20} />
+            </button>
+
+            {/* Emoji Reactions Popup Bar */}
+            {showEmojiPicker && (
+              <div style={{
+                position: 'absolute', bottom: '55px', left: '50%', transform: 'translateX(-50%)',
+                backgroundColor: '#303134', padding: '0.5rem 0.75rem', borderRadius: '30px',
+                display: 'flex', gap: '0.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                border: '1px solid rgba(255,255,255,0.15)'
+              }}>
+                {['💖', '👏', '👍', '🎉', '😂', '🔥'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => {
+                      triggerEmoji(emoji);
+                      setShowEmojiPicker(false);
+                    }}
+                    style={{
+                      background: 'transparent', border: 'none', fontSize: '1.35rem',
+                      cursor: 'pointer', padding: '4px', transition: 'transform 0.15s ease'
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Present Screen */}
+          {isTeacher && (
+            <button
+              onClick={handleToggleScreenShare}
+              style={{
+                width: '44px', height: '44px', borderRadius: '50%',
+                backgroundColor: isScreenSharing ? '#8ab4f8' : 'rgba(255,255,255,0.12)',
+                color: isScreenSharing ? '#202124' : '#ffffff',
+                border: 'none', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer'
+              }}
+              title={isScreenSharing ? 'Stop presenting' : 'Present now'}
+            >
+              <Monitor size={20} />
+            </button>
+          )}
+
+          {/* Record Lecture (Instructor Only) */}
+          {isTeacher && (
+            <button
+              onClick={() => {
+                if (isRecording) {
+                  setIsRecording(false);
+                  setShowPublishModal(true);
+                } else {
+                  setRecordingSeconds(0);
+                  setIsRecording(true);
+                }
+              }}
+              style={{
+                width: '44px', height: '44px', borderRadius: '50%',
+                backgroundColor: isRecording ? '#ea4335' : 'rgba(255,255,255,0.12)',
+                color: isRecording ? '#ffffff' : 'inherit',
+                border: 'none', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer'
+              }}
+              title={isRecording ? 'Stop recording lecture' : 'Record lecture'}
+            >
+              <Disc size={20} />
+            </button>
+          )}
+
+          {/* Raise Hand */}
+          <button
+            onClick={() => setHandRaised(!handRaised)}
+            style={{
+              width: '44px', height: '44px', borderRadius: '50%',
+              backgroundColor: handRaised ? '#fbbc04' : 'rgba(255,255,255,0.12)',
+              color: handRaised ? '#202124' : '#ffffff',
+              border: 'none', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', cursor: 'pointer'
+            }}
+            title={handRaised ? 'Lower hand' : 'Raise hand'}
+          >
+            <Hand size={20} />
+          </button>
+
+          {/* End Call Button */}
+          <button
+            onClick={() => {
+              if (confirm('Leave this live classroom session?')) {
+                localStorage.setItem('skillnara_live_class_active', 'false');
+                setIsLiveActiveState(false);
+              }
+            }}
+            style={{
+              width: '56px', height: '44px', borderRadius: '25px',
+              backgroundColor: '#ea4335', border: 'none', color: '#ffffff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', marginLeft: '0.5rem'
+            }}
+            title="Leave call"
+          >
+            <PhoneOff size={20} />
+          </button>
+        </div>
+
+        {/* Right: Side Panel Drawer Triggers */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button
+            onClick={() => setSidePanelTab(sidePanelTab === 'info' ? null : 'info')}
+            style={{
+              background: sidePanelTab === 'info' ? 'rgba(138,180,248,0.2)' : 'transparent',
+              color: sidePanelTab === 'info' ? '#8ab4f8' : '#9aa0a6',
+              border: 'none', borderRadius: '50%', width: '40px', height: '40px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+            }}
+            title="Meeting details"
+          >
+            <Info size={20} />
+          </button>
+
+          <button
+            onClick={() => setSidePanelTab(sidePanelTab === 'people' ? null : 'people')}
+            style={{
+              background: sidePanelTab === 'people' ? 'rgba(138,180,248,0.2)' : 'transparent',
+              color: sidePanelTab === 'people' ? '#8ab4f8' : '#9aa0a6',
+              border: 'none', borderRadius: '50%', width: '40px', height: '40px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              position: 'relative'
+            }}
+            title="Show everyone"
+          >
+            <Users size={20} />
+            <span style={{
+              position: 'absolute', top: '4px', right: '4px', backgroundColor: '#8ab4f8',
+              color: '#202124', fontSize: '0.6rem', fontWeight: 800, padding: '1px 4px', borderRadius: '8px'
+            }}>
+              8
+            </span>
+          </button>
+
+          <button
+            onClick={() => setSidePanelTab(sidePanelTab === 'chat' ? null : 'chat')}
+            style={{
+              background: sidePanelTab === 'chat' ? 'rgba(138,180,248,0.2)' : 'transparent',
+              color: sidePanelTab === 'chat' ? '#8ab4f8' : '#9aa0a6',
+              border: 'none', borderRadius: '50%', width: '40px', height: '40px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+            }}
+            title="Chat with everyone"
+          >
+            <MessageSquare size={20} />
+          </button>
+
+          <button
+            onClick={() => setSidePanelTab(sidePanelTab === 'activities' ? null : 'activities')}
+            style={{
+              background: sidePanelTab === 'activities' ? 'rgba(138,180,248,0.2)' : 'transparent',
+              color: sidePanelTab === 'activities' ? '#8ab4f8' : '#9aa0a6',
+              border: 'none', borderRadius: '50%', width: '40px', height: '40px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+            }}
+            title="Activities"
+          >
+            <Award size={20} />
+          </button>
+        </div>
+      </footer>
     </div>
   );
 }
