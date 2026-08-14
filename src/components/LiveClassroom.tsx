@@ -461,7 +461,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                   <p>&nbsp;&nbsp;<span style={{ color: '#66d9ef' }}>const</span> [status, setStatus] = <span style={{ color: '#a6e22e' }}>useState</span>(<span style={{ color: '#e6db74' }}>"polite"</span>);</p>
                   <p>&nbsp;&nbsp;<span style={{ color: '#f92672' }}>return</span> (</p>
                   <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>div</span> className=<span style={{ color: '#e6db74' }}>"keigo-container"</span>&gt;</p>
-                  <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>h3</span>&gt;Humble Verb: いただく (itadaku)&lt;/<span style={{ color: '#f92672' }}>h3</span>&gt;</p>
+                  <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>h3</span>&gt;Humble Verb: いただく (itadaku) - {'{'}status{'}'}&lt;/<span style={{ color: '#f92672' }}>h3</span>&gt;</p>
                   <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span style={{ color: '#f92672' }}>div</span>&gt;</p>
                   <p>&nbsp;&nbsp;);</p>
                   <p>{'}'}</p>
