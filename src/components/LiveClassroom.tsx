@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Users, Mic, MicOff, Video as VideoIcon, VideoOff, Hand, Award, Edit3, FileText, CheckCircle2, Plus, Lock } from 'lucide-react';
+import { Send, Users, Mic, MicOff, Video as VideoIcon, VideoOff, Hand, Award, Edit3, FileText, CheckCircle2, Plus, Lock, Monitor, Disc } from 'lucide-react';
 
 interface ChatMessage {
   id: string;
@@ -22,13 +22,27 @@ interface CourseType {
   price: string;
 }
 
+interface RecordedLesson {
+  id: string;
+  title: string;
+  course: string;
+  instructor: string;
+  duration: string;
+  totalTimeSeconds: number;
+  uploadedDate: string;
+  views: string;
+  description: string;
+  materials: { name: string; size: string }[];
+}
+
 interface LiveClassroomProps {
   user: UserType | null;
   purchasedCourseIds?: string[];
   onTriggerCheckout?: (course: CourseType) => void;
+  onUploadRecording?: (lesson: RecordedLesson) => void;
 }
 
-export default function LiveClassroom({ user, purchasedCourseIds = [], onTriggerCheckout }: LiveClassroomProps) {
+export default function LiveClassroom({ user, purchasedCourseIds = [], onTriggerCheckout, onUploadRecording }: LiveClassroomProps) {
   const [activeTab, setActiveTab] = useState<'chat' | 'notes' | 'whiteboard'>('chat');
   
   // Load stream details set by dashboard
@@ -126,6 +140,37 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
   const [isCamOff, setIsCamOff] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [teacherView, setTeacherView] = useState<'slides' | 'face'>('slides');
+
+  // Screen Share & Recording states
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+
+  // Form states to publish recording
+  const [publishDescription, setPublishDescription] = useState(`Recorded live lecture covering "${liveTitle}". Key discussions included language structures, interactive quizzes, and student whiteboard activities.`);
+  const [publishMaterials, setPublishMaterials] = useState('Lesson_Notes.pdf');
+
+  // Recording Timer effect
+  useEffect(() => {
+    let interval: any = null;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (interval) clearInterval(interval);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
+
+  const formatDuration = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Interactive Live Poll states
   const [pollQuestion, setPollQuestion] = useState('What is the humble (Kenjougo) form of the verb 食べる (to eat)?');
@@ -392,7 +437,43 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           }}>
             
             {/* If Teacher is sharing SLIDES */}
-            {teacherView === 'slides' ? (
+            {isScreenSharing ? (
+              // Teacher Screen Share View simulation
+              <div style={{
+                padding: '1.5rem', color: '#ffffff', width: '100%', height: '100%',
+                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                background: 'linear-gradient(135deg, #1e1e1e 0%, #0d0d0d 100%)',
+                fontFamily: 'monospace', fontSize: '0.8rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem', color: '#a3a3a3' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary)' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary)', animation: 'pulse-slow 1s infinite alternate' }}></span>
+                    Screen Share: {defaultInstructorName}\'s Workspace
+                  </span>
+                  <span>VS Code - skillnara_workspace</span>
+                </div>
+                
+                {/* Simulated IDE Code content */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', fontFamily: 'monospace', color: '#f8f8f2', lineHeight: '1.4', margin: 'auto 0', paddingLeft: '1rem' }}>
+                  <p style={{ color: '#75715e' }}>// Simulated Code Editor</p>
+                  <p><span style={{ color: '#f92672' }}>import</span> React, {'{'} useState {'}'} <span style={{ color: '#f92672' }}>from</span> <span style={{ color: '#e6db74' }}>'react'</span>;</p>
+                  <p><span style={{ color: '#66d9ef' }}>function</span> <span style={{ color: '#a6e22e' }}>KeigoEtiquette</span>() {'{'}</p>
+                  <p>&nbsp;&nbsp;<span style={{ color: '#66d9ef' }}>const</span> [status, setStatus] = <span style={{ color: '#a6e22e' }}>useState</span>(<span style={{ color: '#e6db74' }}>"polite"</span>);</p>
+                  <p>&nbsp;&nbsp;<span style={{ color: '#f92672' }}>return</span> (</p>
+                  <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>div</span> className=<span style={{ color: '#e6db74' }}>"keigo-container"</span>&gt;</p>
+                  <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>h3</span>&gt;Humble Verb: いただく (itadaku)&lt;/<span style={{ color: '#f92672' }}>h3</span>&gt;</p>
+                  <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span style={{ color: '#f92672' }}>div</span>&gt;</p>
+                  <p>&nbsp;&nbsp;);</p>
+                  <p>{'}'}</p>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#75715e', fontSize: '0.7rem' }}>
+                  <span>Ln 12, Col 24</span>
+                  <span>UTF-8</span>
+                  <span>TypeScript React</span>
+                </div>
+              </div>
+            ) : teacherView === 'slides' ? (
               <div style={{
                 padding: '2.5rem', color: '#ffffff', width: '100%', height: '100%',
                 display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
@@ -495,13 +576,30 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
             {/* Simulated Live indicator */}
             <div style={{
               position: 'absolute', top: '1rem', left: '1rem',
-              display: 'flex', alignItems: 'center', gap: '0.4rem',
-              backgroundColor: 'rgba(239, 68, 68, 0.9)', padding: '0.25rem 0.6rem',
-              borderRadius: '4px', color: '#ffffff', fontSize: '0.75rem', fontWeight: 800,
-              textTransform: 'uppercase', letterSpacing: '0.05em', zIndex: 5
+              display: 'flex', alignItems: 'center', gap: '0.6rem',
+              zIndex: 5
             }}>
-              <span style={{ width: '6px', height: '6px', backgroundColor: '#ffffff', borderRadius: '50%', display: 'inline-block', animation: 'pulse-slow 1s infinite alternate' }}></span>
-              Live Broadcast
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                backgroundColor: 'rgba(239, 68, 68, 0.9)', padding: '0.25rem 0.6rem',
+                borderRadius: '4px', color: '#ffffff', fontSize: '0.75rem', fontWeight: 800,
+                textTransform: 'uppercase', letterSpacing: '0.05em'
+              }}>
+                <span style={{ width: '6px', height: '6px', backgroundColor: '#ffffff', borderRadius: '50%', display: 'inline-block', animation: 'pulse-slow 1s infinite alternate' }}></span>
+                Live Broadcast
+              </div>
+
+              {isRecording && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '0.4rem',
+                  backgroundColor: 'rgba(0, 0, 0, 0.75)', padding: '0.25rem 0.6rem',
+                  borderRadius: '4px', color: '#f43f5e', fontSize: '0.75rem', fontWeight: 800,
+                  border: '1px solid rgba(244, 63, 94, 0.3)'
+                }}>
+                  <span style={{ width: '6.5px', height: '6.5px', backgroundColor: '#f43f5e', borderRadius: '50%', display: 'inline-block', animation: 'pulse-slow 0.8s infinite alternate' }}></span>
+                  <span>REC {formatDuration(recordingSeconds)}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -538,6 +636,44 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
               >
                 {isCamOff ? <VideoOff size={18} /> : <VideoIcon size={18} />}
               </button>
+
+              {isTeacher && (
+                <>
+                  <button
+                    onClick={() => setIsScreenSharing(!isScreenSharing)}
+                    className={`btn btn-sm ${isScreenSharing ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{
+                      borderRadius: '50%', width: '40px', height: '40px', padding: 0,
+                      border: isScreenSharing ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                      color: isScreenSharing ? 'var(--primary)' : 'inherit'
+                    }}
+                    title={isScreenSharing ? 'Stop sharing screen' : 'Share screen'}
+                  >
+                    <Monitor size={18} />
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (isRecording) {
+                        setIsRecording(false);
+                        setShowPublishModal(true);
+                      } else {
+                        setRecordingSeconds(0);
+                        setIsRecording(true);
+                      }
+                    }}
+                    className={`btn btn-sm ${isRecording ? 'btn-secondary' : 'btn-ghost'}`}
+                    style={{
+                      borderRadius: '50%', width: '40px', height: '40px', padding: 0,
+                      border: isRecording ? '1px solid var(--accent-rose)' : '1px solid var(--border-color)',
+                      color: isRecording ? 'var(--accent-rose)' : 'inherit'
+                    }}
+                    title={isRecording ? 'Stop recording lecture' : 'Start recording lecture'}
+                  >
+                    <Disc size={18} style={{ animation: isRecording ? 'pulse-slow 1s infinite alternate' : 'none' }} />
+                  </button>
+                </>
+              )}
             </div>
 
             {isTeacher ? (
@@ -573,7 +709,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
             )}
 
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {isTeacher ? 'Recording: ACTIVE (Cloud Sync)' : 'Latency: 12ms • Status: Excellent'}
+              {isRecording ? 'Recording live stream...' : 'Latency: 12ms • Status: Excellent'}
             </span>
           </div>
 
@@ -958,6 +1094,142 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           </div>
         )}
       </div>
+
+      {/* Publish Recording Modal */}
+      {showPublishModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(2, 12, 21, 0.8)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div className="glass-card animate-fade-in" style={{
+            width: '100%',
+            maxWidth: '500px',
+            padding: '2.25rem',
+            backgroundColor: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.5rem'
+          }}>
+            <div>
+              <span className="gradient-text" style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Lecture Recording Finished
+              </span>
+              <h3 style={{ fontSize: '1.35rem', fontWeight: 800, marginTop: '0.25rem' }}>Publish Lecture to Archive</h3>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Lecture Title</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={liveTitle}
+                  disabled
+                  style={{ fontSize: '0.9rem', borderRadius: '8px', opacity: 0.8 }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Duration</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formatDuration(recordingSeconds)}
+                    disabled
+                    style={{ fontSize: '0.9rem', borderRadius: '8px', opacity: 0.8, fontFamily: 'monospace', textAlign: 'center' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Course</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={liveCourse}
+                    disabled
+                    style={{ fontSize: '0.9rem', borderRadius: '8px', opacity: 0.8, textAlign: 'center' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Materials / Slides PDF</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Lesson_Slides_Keigo.pdf"
+                  className="form-input"
+                  value={publishMaterials}
+                  onChange={(e) => setPublishMaterials(e.target.value)}
+                  style={{ fontSize: '0.9rem', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Description</label>
+                <textarea
+                  className="form-input"
+                  value={publishDescription}
+                  onChange={(e) => setPublishDescription(e.target.value)}
+                  style={{ fontSize: '0.9rem', borderRadius: '8px', resize: 'none', height: '80px' }}
+                ></textarea>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Discard this recording? It will not be saved.')) {
+                    setShowPublishModal(false);
+                    setRecordingSeconds(0);
+                  }
+                }}
+                className="btn btn-secondary"
+                style={{ borderRadius: '20px', fontSize: '0.85rem' }}
+              >
+                Discard
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  if (onUploadRecording) {
+                    onUploadRecording({
+                      id: 'rec-live-' + Date.now(),
+                      title: liveTitle,
+                      course: liveCourse,
+                      instructor: defaultInstructorName,
+                      duration: formatDuration(recordingSeconds),
+                      totalTimeSeconds: recordingSeconds,
+                      uploadedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                      views: '1 view',
+                      description: publishDescription,
+                      materials: publishMaterials ? [{ name: publishMaterials, size: '1.2 MB' }] : []
+                    });
+                  }
+                  setShowPublishModal(false);
+                  setRecordingSeconds(0);
+                  alert('Lecture recording has been successfully published to the Recorded Archive!');
+                }}
+                className="btn btn-primary"
+                style={{ borderRadius: '20px', fontSize: '0.85rem', gap: '0.4rem' }}
+              >
+                <Disc size={14} />
+                <span>Publish to Archive</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* CSS queries */}
       <style>{`

@@ -217,6 +217,7 @@ export default function App() {
             user={user}
             purchasedCourseIds={purchasedCourseIds}
             onTriggerCheckout={(course) => setCheckoutCourse(course)}
+            onUploadRecording={handleUploadRecording}
           />
         );
       case 'recorded':
