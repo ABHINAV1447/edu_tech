@@ -447,12 +447,29 @@ export default function Login({ onLogin }: LoginProps) {
 
             <div style={{
               backgroundColor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)',
-              borderRadius: '12px', padding: '1rem', textAlign: 'center', fontSize: '0.85rem'
+              borderRadius: '12px', padding: '1rem', textAlign: 'center', fontSize: '0.85rem',
+              display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center'
             }}>
               <p style={{ margin: 0, color: 'var(--text-primary)' }}>
                 Please check your email inbox at <strong>{email}</strong>
               </p>
-              <span style={{ fontSize: '0.75rem', color: 'var(--secondary)', display: 'block', marginTop: '0.2rem' }}>
+
+              <a
+                href={`https://mail.google.com/mail/u/0/#search/Skillnara`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  backgroundColor: 'rgba(59, 130, 246, 0.2)', color: 'var(--secondary)',
+                  border: '1px solid var(--secondary)', borderRadius: '15px',
+                  padding: '0.3rem 0.85rem', fontSize: '0.78rem', fontWeight: 700,
+                  textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.3rem'
+                }}
+              >
+                <Mail size={13} />
+                <span>Open Gmail Inbox to Check Email</span>
+              </a>
+
+              <span style={{ fontSize: '0.75rem', color: 'var(--secondary)', display: 'block' }}>
                 OTP Expires in: {formatTimer(otpTimer)}
               </span>
             </div>
@@ -487,6 +504,21 @@ export default function Login({ onLogin }: LoginProps) {
                 />
               ))}
             </div>
+
+            {/* Instant Code Reveal Helper */}
+            <button
+              type="button"
+              onClick={() => {
+                setOtpDigits(generatedOtp.split(''));
+                setError('');
+              }}
+              style={{
+                background: 'none', border: 'none', color: 'var(--secondary)', fontSize: '0.78rem',
+                cursor: 'pointer', textDecoration: 'underline', alignSelf: 'center'
+              }}
+            >
+              Didn't receive email? Reveal Code ({generatedOtp}) & Auto-Fill
+            </button>
 
             <button type="submit" className="btn btn-primary" style={{ borderRadius: '25px', gap: '0.5rem', justifyContent: 'center' }}>
               <ShieldCheck size={18} />
