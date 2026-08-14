@@ -218,6 +218,7 @@ export default function App() {
             purchasedCourseIds={purchasedCourseIds}
             onTriggerCheckout={(course) => setCheckoutCourse(course)}
             onUploadRecording={handleUploadRecording}
+            setNavigationTab={setActiveTab}
           />
         );
       case 'recorded':

@@ -131,6 +131,7 @@ export default function TeacherDashboard({
     // Simulate setting this live class
     localStorage.setItem('skillnara_active_live_title', liveTitle);
     localStorage.setItem('skillnara_active_live_course', liveCourse);
+    localStorage.setItem('skillnara_live_class_active', 'true');
     setActiveTab('live');
   };
 

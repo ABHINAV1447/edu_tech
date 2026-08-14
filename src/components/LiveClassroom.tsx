@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Users, Mic, MicOff, Video as VideoIcon, VideoOff, Hand, Award, Edit3, FileText, CheckCircle2, Plus, Lock, Monitor, Disc } from 'lucide-react';
+import { Send, Users, Mic, MicOff, Video as VideoIcon, VideoOff, Hand, Award, Edit3, FileText, CheckCircle2, Plus, Lock, Monitor, Disc, Tv } from 'lucide-react';
 
 interface ChatMessage {
   id: string;
@@ -40,9 +40,10 @@ interface LiveClassroomProps {
   purchasedCourseIds?: string[];
   onTriggerCheckout?: (course: CourseType) => void;
   onUploadRecording?: (lesson: RecordedLesson) => void;
+  setNavigationTab?: (tab: string) => void;
 }
 
-export default function LiveClassroom({ user, purchasedCourseIds = [], onTriggerCheckout, onUploadRecording }: LiveClassroomProps) {
+export default function LiveClassroom({ user, purchasedCourseIds = [], onTriggerCheckout, onUploadRecording, setNavigationTab }: LiveClassroomProps) {
   const [activeTab, setActiveTab] = useState<'chat' | 'notes' | 'whiteboard'>('chat');
   
   // Load stream details set by dashboard
@@ -80,6 +81,54 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
 
   const activeCourseId = getCourseId(liveCourse);
   const isPurchased = purchasedCourseIds.includes(activeCourseId);
+
+  const isLiveActive = localStorage.getItem('skillnara_live_class_active') === 'true';
+  if (!isTeacher && !isLiveActive) {
+    return (
+      <div className="container animate-fade-in" style={{
+        padding: '6rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '65vh'
+      }}>
+        <div className="glass-card" style={{
+          maxWidth: '520px', width: '100%', padding: '3.5rem 2.5rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1.5rem',
+          border: '1px solid var(--border-color)', boxShadow: 'var(--primary-glow) 0 10px 40px'
+        }}>
+          <div style={{
+            width: '70px', height: '70px', borderRadius: '50%', backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto'
+          }}>
+            <Tv size={36} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Waiting For Instructor
+            </span>
+            <h2 style={{ fontSize: '1.65rem', fontWeight: 800, marginTop: '0.5rem' }}>
+              No Active Live Classroom
+            </h2>
+          </div>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+            There are currently no active live broadcasts. Instructors will start live classes according to their schedules. Once started, you can join directly from your dashboard or this page.
+          </p>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '0.5rem' }}>
+            <button
+              onClick={() => setNavigationTab && setNavigationTab('dashboard')}
+              className="btn btn-secondary"
+              style={{ borderRadius: '25px', padding: '0.6rem 1.5rem', fontSize: '0.85rem' }}
+            >
+              Check Schedule
+            </button>
+            <button
+              onClick={() => setNavigationTab && setNavigationTab('recorded')}
+              className="btn btn-primary"
+              style={{ borderRadius: '25px', padding: '0.6rem 1.5rem', fontSize: '0.85rem' }}
+            >
+              Browse Recorded Archive
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isTeacher && !isPurchased) {
     return (
@@ -680,6 +729,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
               <button
                 onClick={() => {
                   if (confirm('Are you sure you want to end this live broadcast? All students will be disconnected.')) {
+                    localStorage.removeItem('skillnara_live_class_active');
                     alert('Broadcast terminated.');
                     window.location.reload();
                   }

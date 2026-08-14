@@ -137,14 +137,39 @@ export default function Dashboard({
     return 'career-cert';
   };
 
-  const upcomingClasses = [
+  const isLiveActive = localStorage.getItem('skillnara_live_class_active') === 'true';
+  const activeTitle = localStorage.getItem('skillnara_active_live_title') || 'Business Communication & Resume Building Practice';
+  const activeCourse = localStorage.getItem('skillnara_active_live_course') || 'Business Communication & Keigo';
+
+  const getInstructorForCourse = (courseName: string) => {
+    if (courseName.includes('Japanese') || courseName.includes('JLPT') || courseName.includes('jp-n5')) return 'Sree Ma\'am';
+    if (courseName.includes('Coding') || courseName.includes('Web') || courseName.includes('coding-fs')) return 'Murugun Sir';
+    if (courseName.includes('Marketing') || courseName.includes('Digital') || courseName.includes('dm-strategy')) return 'Simran Ma\'am';
+    if (courseName.includes('Business') || courseName.includes('Keigo') || courseName.includes('biz-comm')) return 'Bhawna Ma\'am';
+    return 'Manish Sir';
+  };
+
+  const upcomingClasses = [];
+  
+  if (isLiveActive) {
+    upcomingClasses.push({
+      id: 'active-live-session',
+      title: activeTitle,
+      course: activeCourse,
+      time: 'Live Now!',
+      instructor: getInstructorForCourse(activeCourse),
+      active: true
+    });
+  }
+
+  upcomingClasses.push(
     {
       id: 'live-class-1',
       title: 'Business Communication & Resume Building Practice',
       course: 'Business Communication & Keigo',
-      time: 'Today, 8:00 PM (In 1 hour)',
+      time: 'Today, 8:00 PM',
       instructor: 'Bhawna Ma\'am',
-      active: true
+      active: false
     },
     {
       id: 'live-class-2',
@@ -162,7 +187,7 @@ export default function Dashboard({
       instructor: 'Simran Ma\'am',
       active: false
     }
-  ];
+  );
 
   const handleLogHours = (e: React.FormEvent) => {
     e.preventDefault();
