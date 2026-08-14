@@ -210,11 +210,54 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
   ]);
   const [inputMessage, setInputMessage] = useState('');
   
-  // Audio/Video simulation states
+  // Audio/Video simulation & real MediaStream states
   const [isMuted, setIsMuted] = useState(false);
   const [isCamOff, setIsCamOff] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [teacherView, setTeacherView] = useState<'slides' | 'face'>('slides');
+
+  // Real Webcam MediaStream states & refs (for both Teachers and Students)
+  const [hasWebcamStream, setHasWebcamStream] = useState(false);
+  const webcamStreamRef = useRef<MediaStream | null>(null);
+  const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Attach webcam MediaStream to webcamVideoRef element whenever video component mounts
+  useEffect(() => {
+    if (!isCamOff && webcamVideoRef.current && webcamStreamRef.current) {
+      webcamVideoRef.current.srcObject = webcamStreamRef.current;
+    }
+  }, [isCamOff, hasWebcamStream, teacherView]);
+
+  const handleToggleCamera = async () => {
+    if (!isCamOff) {
+      // Turn OFF camera and stop tracks
+      if (webcamStreamRef.current) {
+        webcamStreamRef.current.getTracks().forEach(track => track.stop());
+        webcamStreamRef.current = null;
+      }
+      setHasWebcamStream(false);
+      setIsCamOff(true);
+    } else {
+      // Turn ON camera
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+          webcamStreamRef.current = stream;
+          setHasWebcamStream(true);
+          setIsCamOff(false);
+        } else {
+          setIsCamOff(false);
+        }
+      } catch (err) {
+        console.warn('Webcam camera access error or permission denied:', err);
+        // Fallback to active state without crashing
+        setIsCamOff(false);
+      }
+    }
+  };
 
   // Screen Share & Recording states
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -663,54 +706,99 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                 </div>
               </div>
             ) : (
-              // Teacher face video stream simulation
+              // Teacher face video stream container
               <div style={{
                 position: 'relative', width: '100%', height: '100%',
                 background: 'radial-gradient(circle, #0a2538 0%, #020c15 100%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden'
               }}>
-                {/* Simulated webcam visual */}
-                <div style={{
-                  width: '160px', height: '160px', borderRadius: '50%',
-                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#ffffff', fontSize: '2.5rem', fontWeight: 800,
-                  boxShadow: 'var(--primary-glow) 0 10px 40px'
-                }}>
-                  {defaultInstructorInitials}
-                </div>
+                {!isCamOff ? (
+                  hasWebcamStream && webcamStreamRef.current ? (
+                    <video
+                      ref={webcamVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                      <div style={{
+                        width: '150px', height: '150px', borderRadius: '50%',
+                        background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#ffffff', fontSize: '2.5rem', fontWeight: 800,
+                        boxShadow: 'var(--primary-glow) 0 10px 40px'
+                      }}>
+                        {defaultInstructorInitials}
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)' }}>
+                        Camera Active • {defaultInstructorName}
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
+                    <VideoOff size={48} color="var(--accent-rose)" />
+                    <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>Camera Turned Off</span>
+                  </div>
+                )}
+                
                 <div style={{
                   position: 'absolute', bottom: '1rem', left: '1rem',
                   backgroundColor: 'rgba(0,0,0,0.6)', padding: '0.35rem 0.75rem', borderRadius: '4px',
-                  fontSize: '0.8rem', color: '#ffffff', fontWeight: 600
+                  fontSize: '0.8rem', color: '#ffffff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem'
                 }}>
-                  {defaultInstructorName} (Webcam stream)
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isCamOff ? 'var(--accent-rose)' : '#10b981' }}></span>
+                  {defaultInstructorName} ({isCamOff ? 'Cam Off' : 'Webcam Live'})
                 </div>
               </div>
             )}
 
-            {/* Small student webcam overlay in corner (only if student) */}
-            {!isTeacher && !isCamOff && (
+            {/* Corner student webcam widget (for students) */}
+            {!isTeacher && (
               <div style={{
                 position: 'absolute', top: '1rem', right: '1rem',
-                width: '100px', height: '70px', borderRadius: '8px',
-                backgroundColor: 'rgba(26,26,26,0.85)', border: '1px solid rgba(255,255,255,0.15)',
+                width: '120px', height: '80px', borderRadius: '10px',
+                backgroundColor: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(255,255,255,0.15)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', zIndex: 10
+                overflow: 'hidden', boxShadow: '0 8px 16px rgba(0,0,0,0.4)', zIndex: 20
               }}>
+                {!isCamOff ? (
+                  hasWebcamStream && webcamStreamRef.current ? (
+                    <video
+                      ref={webcamVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <div style={{
+                        width: '28px', height: '28px', borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #10b981 0%, #6366f1 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.65rem', color: '#ffffff', fontWeight: 700
+                      }}>
+                        SN
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem', color: 'var(--accent-rose)' }}>
+                    <VideoOff size={18} />
+                    <span style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.6)' }}>Cam Off</span>
+                  </div>
+                )}
+
                 <div style={{
-                  width: '30px', height: '30px', borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #10b981 0%, #6366f1 100%)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.7rem', color: '#ffffff'
+                  position: 'absolute', bottom: '3px', left: '6px',
+                  fontSize: '0.55rem', color: '#ffffff', fontWeight: 600,
+                  backgroundColor: 'rgba(0,0,0,0.6)', padding: '1px 4px', borderRadius: '3px'
                 }}>
-                  SN
-                </div>
-                <div style={{
-                  position: 'absolute', bottom: '2px', left: '4px',
-                  fontSize: '0.55rem', color: '#ffffff'
-                }}>
-                  You (Student)
+                  You {isCamOff ? '(Off)' : '(Cam)'}
                 </div>
               </div>
             )}
@@ -779,14 +867,14 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
               </button>
               
               <button
-                onClick={() => setIsCamOff(!isCamOff)}
+                onClick={handleToggleCamera}
                 className={`btn btn-sm ${isCamOff ? 'btn-secondary' : 'btn-ghost'}`}
                 style={{
                   borderRadius: '50%', width: '40px', height: '40px', padding: 0,
                   border: isCamOff ? '1px solid var(--accent-rose)' : '1px solid var(--border-color)',
                   color: isCamOff ? 'var(--accent-rose)' : 'inherit'
                 }}
-                title={isCamOff ? 'Turn webcam on' : 'Turn webcam off'}
+                title={isCamOff ? 'Turn camera ON' : 'Turn camera OFF'}
               >
                 {isCamOff ? <VideoOff size={18} /> : <VideoIcon size={18} />}
               </button>
