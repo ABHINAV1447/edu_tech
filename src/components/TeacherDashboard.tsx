@@ -696,6 +696,65 @@ export default function TeacherDashboard({
             </div>
           </div>
 
+          {/* Registered Users Roster & Registration Analytics */}
+          <div className="glass-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Registered Learners & User Analytics</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Real-time user registration tracking across Skillnara platform</p>
+              </div>
+              <span style={{ backgroundColor: 'var(--primary-glow)', color: 'var(--primary)', padding: '0.35rem 0.85rem', borderRadius: '15px', fontSize: '0.8rem', fontWeight: 700 }}>
+                Total Registered: 5,420 Users
+              </span>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                    <th style={{ padding: '0.75rem 1rem' }}>Learner Name</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Email Address</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Account Role</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Registration Date</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Welcome Email</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ...(JSON.parse(localStorage.getItem('skillnara_registered_users') || '[]')),
+                    { name: 'Student Nara (You)', email: 'student.nara@skillnara.edu', role: 'student', joinedDate: 'Aug 01, 2026', status: 'Active' },
+                    { name: 'John Smith', email: 'john.smith@gmail.com', role: 'student', joinedDate: 'Aug 08, 2026', status: 'Active' },
+                    { name: 'Aimi Sato', email: 'aimi.sato@yahoo.co.jp', role: 'student', joinedDate: 'Aug 10, 2026', status: 'Active' },
+                    { name: 'Kenji Suzuki', email: 'kenji.suzuki@outlook.com', role: 'student', joinedDate: 'Aug 12, 2026', status: 'Active' },
+                    { name: 'Priya Patel', email: 'priya.patel@tech.in', role: 'student', joinedDate: 'Aug 14, 2026', status: 'Active' }
+                  ].map((userItem, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>{userItem.name}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{userItem.email}</td>
+                      <td style={{ padding: '0.75rem 1rem', textTransform: 'capitalize' }}>
+                        <span style={{
+                          backgroundColor: userItem.role === 'teacher' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 144, 0, 0.15)',
+                          color: userItem.role === 'teacher' ? 'var(--secondary)' : 'var(--primary)',
+                          padding: '0.2rem 0.55rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700
+                        }}>
+                          {userItem.role}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{userItem.joinedDate}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--accent-mint)', fontWeight: 600 }}>Sent ✓</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>
+                        <span style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-mint)', padding: '0.2rem 0.55rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700 }}>
+                          {userItem.status || 'Active'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       )}
 
