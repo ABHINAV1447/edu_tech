@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Send, Users, Mic, MicOff, Video as VideoIcon, VideoOff, Hand, Award, 
   Lock, Monitor, Disc, Info, MessageSquare, PhoneOff, 
-  Copy, Pin, Smile, LayoutGrid, X, Check, Search, Tv
+  Copy, Pin, Smile, LayoutGrid, X, Check, Search, Tv, Volume2
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -323,7 +323,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
     const newReaction: FloatingReaction = {
       id: Date.now() + Math.random(),
       emoji,
-      left: Math.floor(Math.random() * 60) + 20
+      left: Math.floor(Math.random() * 50) + 25
     };
     setFloatingReactions((prev) => [...prev, newReaction]);
     setTimeout(() => {
@@ -500,7 +500,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
   return (
     <div style={{
       width: '100%',
-      minHeight: 'calc(100vh - 70px)',
+      height: 'calc(100vh - 70px)',
       backgroundColor: '#18191c',
       color: '#ffffff',
       display: 'flex',
@@ -513,7 +513,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
       {copyToast && (
         <div style={{
           position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)',
-          backgroundColor: '#323232', color: '#ffffff', padding: '0.6rem 1.2rem',
+          backgroundColor: '#323232', color: '#ffffff', padding: '0.6rem 1.25rem',
           borderRadius: '25px', fontSize: '0.85rem', fontWeight: 600,
           boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 1000,
           display: 'flex', alignItems: 'center', gap: '0.5rem'
@@ -578,37 +578,37 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
         </div>
       )}
 
-      {/* 1. Google Meet Top Header Bar */}
+      {/* 1. Google Meet Pixel-Perfect Top Header Bar */}
       <header style={{
-        height: '56px',
-        padding: '0 1.25rem',
+        height: '60px',
+        padding: '0 1.5rem',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#202124',
+        backgroundColor: '#1e1f22',
         borderBottom: '1px solid rgba(255,255,255,0.08)',
         zIndex: 50
       }}>
         {/* Left: Meeting Title & Code */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <span style={{
               backgroundColor: '#ea4335', color: '#ffffff', fontSize: '0.7rem', fontWeight: 800,
-              padding: '0.15rem 0.45rem', borderRadius: '3px', textTransform: 'uppercase', letterSpacing: '0.05em'
+              padding: '0.2rem 0.5rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em'
             }}>
               LIVE
             </span>
             <h1 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#ffffff', margin: 0 }}>{liveTitle}</h1>
           </div>
 
-          <div style={{ height: '18px', width: '1px', backgroundColor: 'rgba(255,255,255,0.2)' }} />
+          <div style={{ height: '18px', width: '1px', backgroundColor: 'rgba(255,255,255,0.15)' }} />
 
           <button
             onClick={copyMeetingLink}
             style={{
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '20px', padding: '0.25rem 0.75rem', color: '#e8eaed',
-              fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer'
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '20px', padding: '0.3rem 0.85rem', color: '#e8eaed',
+              fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer'
             }}
             title="Click to copy meeting link"
           >
@@ -618,12 +618,12 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
         </div>
 
         {/* Right: Layout Switcher, Time & Recording */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {isRecording && (
             <div style={{
-              display: 'flex', alignItems: 'center', gap: '0.4rem',
+              display: 'flex', alignItems: 'center', gap: '0.45rem',
               backgroundColor: 'rgba(234, 67, 53, 0.15)', border: '1px solid rgba(234, 67, 53, 0.4)',
-              color: '#ea4335', padding: '0.25rem 0.6rem', borderRadius: '15px', fontSize: '0.75rem', fontWeight: 700
+              color: '#ea4335', padding: '0.25rem 0.7rem', borderRadius: '15px', fontSize: '0.75rem', fontWeight: 700
             }}>
               <span style={{ width: '7px', height: '7px', backgroundColor: '#ea4335', borderRadius: '50%', animation: 'pulse-slow 0.8s infinite alternate' }} />
               <span>REC {formatDuration(recordingSeconds)}</span>
@@ -631,13 +631,13 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           )}
 
           {/* Layout Mode Picker */}
-          <div style={{ display: 'flex', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '2px' }}>
+          <div style={{ display: 'flex', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '3px' }}>
             <button
               onClick={() => setStageMode('presentation')}
               style={{
                 background: stageMode === 'presentation' ? '#8ab4f8' : 'transparent',
                 color: stageMode === 'presentation' ? '#202124' : '#e8eaed',
-                border: 'none', borderRadius: '18px', padding: '0.3rem 0.75rem',
+                border: 'none', borderRadius: '16px', padding: '0.3rem 0.8rem',
                 fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
               }}
             >
@@ -648,7 +648,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
               style={{
                 background: stageMode === 'grid' ? '#8ab4f8' : 'transparent',
                 color: stageMode === 'grid' ? '#202124' : '#e8eaed',
-                border: 'none', borderRadius: '18px', padding: '0.3rem 0.75rem',
+                border: 'none', borderRadius: '16px', padding: '0.3rem 0.8rem',
                 fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem'
               }}
             >
@@ -660,7 +660,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
               style={{
                 background: stageMode === 'spotlight' ? '#8ab4f8' : 'transparent',
                 color: stageMode === 'spotlight' ? '#202124' : '#e8eaed',
-                border: 'none', borderRadius: '18px', padding: '0.3rem 0.75rem',
+                border: 'none', borderRadius: '16px', padding: '0.3rem 0.8rem',
                 fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
               }}
             >
@@ -680,7 +680,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
         {/* Main Stage View Area */}
         <div style={{
           flex: 1,
-          padding: '1rem',
+          padding: '1.25rem',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
@@ -709,19 +709,20 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
 
           {/* PRESENTATION MODE: Main Presentation Box + Side Video Tile Strip */}
           {stageMode === 'presentation' && (
-            <div style={{ width: '100%', height: '100%', display: 'flex', gap: '1rem' }}>
+            <div style={{ width: '100%', height: '100%', display: 'flex', gap: '1.25rem' }}>
               
               {/* Main Center Presentation Stage */}
               <div style={{
                 flex: 1,
-                backgroundColor: '#202124',
+                backgroundColor: '#1e1f22',
                 borderRadius: '16px',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.08)',
                 position: 'relative',
                 overflow: 'hidden',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                boxShadow: '0 12px 32px rgba(0,0,0,0.5)'
               }}>
                 {isScreenSharing ? (
                   hasRealStream && screenStreamRef.current ? (
@@ -808,44 +809,46 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                   </div>
                 )}
 
-                {/* Subtitles / Closed Captions Overlay */}
+                {/* Subtitles / Closed Captions Overlay Banner */}
                 {showCaptions && (
                   <div style={{
-                    position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)',
-                    backgroundColor: 'rgba(0,0,0,0.85)', padding: '0.5rem 1.25rem', borderRadius: '8px',
-                    color: '#ffffff', fontSize: '0.9rem', maxWidth: '80%', textAlign: 'center',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)', zIndex: 30, border: '1px solid rgba(255,255,255,0.1)'
+                    position: 'absolute', bottom: '1.25rem', left: '50%', transform: 'translateX(-50%)',
+                    backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+                    padding: '0.6rem 1.4rem', borderRadius: '8px',
+                    color: '#ffffff', fontSize: '0.9rem', maxWidth: '82%', textAlign: 'center',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 30, border: '1px solid rgba(255,255,255,0.12)'
                   }}>
                     <span>{captionSubtitles[captionIndex]}</span>
                   </div>
                 )}
               </div>
 
-              {/* Right Vertical Tile Strip (Google Meet Side Participant Videos) */}
+              {/* Right Vertical Tile Strip (Google Meet Side Video Cards) */}
               <div style={{
-                width: '210px',
+                width: '230px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '0.75rem',
+                gap: '0.85rem',
                 overflowY: 'auto'
               }}>
                 {/* 1. Instructor Video Tile */}
                 <div style={{
-                  height: '135px',
-                  backgroundColor: '#202124',
+                  aspectRatio: '16/9',
+                  backgroundColor: '#28292c',
                   borderRadius: '12px',
                   border: pinnedUser === 'instructor' ? '2px solid #8ab4f8' : '1px solid rgba(255,255,255,0.1)',
                   position: 'relative',
                   overflow: 'hidden',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
                 }}>
                   {!isCamOff && isTeacher && hasWebcamStream && webcamStreamRef.current ? (
                     <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{
-                      width: '45px', height: '45px', borderRadius: '50%',
+                      width: '46px', height: '46px', borderRadius: '50%',
                       background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: '#ffffff', fontWeight: 700, fontSize: '1rem'
@@ -855,11 +858,19 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                   )}
 
                   <div style={{
-                    position: 'absolute', bottom: '6px', left: '8px',
-                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '2px 6px', borderRadius: '4px',
-                    fontSize: '0.65rem', color: '#ffffff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem'
+                    position: 'absolute', bottom: '8px', left: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px',
+                    fontSize: '0.7rem', color: '#ffffff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem'
                   }}>
                     <span>{defaultInstructorName}</span>
+                  </div>
+
+                  <div style={{
+                    position: 'absolute', bottom: '8px', right: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '4px', borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <Volume2 size={12} color="#34a853" />
                   </div>
 
                   <button
@@ -876,117 +887,119 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
 
                 {/* 2. Student (You) Video Tile */}
                 <div style={{
-                  height: '135px',
-                  backgroundColor: '#202124',
+                  aspectRatio: '16/9',
+                  backgroundColor: '#28292c',
                   borderRadius: '12px',
                   border: pinnedUser === 'you' ? '2px solid #8ab4f8' : '1px solid rgba(255,255,255,0.1)',
                   position: 'relative',
                   overflow: 'hidden',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
                 }}>
                   {!isCamOff && !isTeacher && hasWebcamStream && webcamStreamRef.current ? (
                     <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{
-                      width: '45px', height: '45px', borderRadius: '50%',
+                      width: '46px', height: '46px', borderRadius: '50%',
                       background: 'linear-gradient(135deg, #10b981 0%, #6366f1 100%)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#ffffff', fontWeight: 700, fontSize: '0.9rem'
+                      color: '#ffffff', fontWeight: 700, fontSize: '0.95rem'
                     }}>
                       SN
                     </div>
                   )}
 
                   <div style={{
-                    position: 'absolute', bottom: '6px', left: '8px',
-                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '2px 6px', borderRadius: '4px',
-                    fontSize: '0.65rem', color: '#ffffff', fontWeight: 600
+                    position: 'absolute', bottom: '8px', left: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px',
+                    fontSize: '0.7rem', color: '#ffffff', fontWeight: 600
                   }}>
                     You {isCamOff ? '(Cam Off)' : ''}
                   </div>
 
                   <div style={{
-                    position: 'absolute', bottom: '6px', right: '8px',
-                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '3px', borderRadius: '50%'
+                    position: 'absolute', bottom: '8px', right: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '4px', borderRadius: '50%'
                   }}>
-                    {isMuted ? <MicOff size={11} color="#ea4335" /> : <Mic size={11} color="#34a853" />}
+                    {isMuted ? <MicOff size={12} color="#ea4335" /> : <Mic size={12} color="#34a853" />}
                   </div>
                 </div>
 
                 {/* 3. Peer Student Tile: Aimi Sato */}
                 <div style={{
-                  height: '135px', backgroundColor: '#202124', borderRadius: '12px',
+                  aspectRatio: '16/9', backgroundColor: '#28292c', borderRadius: '12px',
                   border: '1px solid rgba(255,255,255,0.1)', position: 'relative',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
                   <div style={{
-                    width: '42px', height: '42px', borderRadius: '50%',
+                    width: '44px', height: '44px', borderRadius: '50%',
                     backgroundColor: '#ec4899', color: '#ffffff', fontWeight: 700,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem'
                   }}>
                     AS
                   </div>
                   <div style={{
-                    position: 'absolute', bottom: '6px', left: '8px',
-                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '2px 6px', borderRadius: '4px',
-                    fontSize: '0.65rem', color: '#ffffff'
+                    position: 'absolute', bottom: '8px', left: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px',
+                    fontSize: '0.7rem', color: '#ffffff'
                   }}>
                     Aimi Sato
                   </div>
-                  <div style={{ position: 'absolute', bottom: '6px', right: '8px', backgroundColor: 'rgba(0,0,0,0.65)', padding: '3px', borderRadius: '50%' }}>
-                    <MicOff size={11} color="#ea4335" />
+                  <div style={{ position: 'absolute', bottom: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.7)', padding: '4px', borderRadius: '50%' }}>
+                    <MicOff size={12} color="#ea4335" />
                   </div>
                 </div>
 
                 {/* 4. Peer Student Tile: Kenji Suzuki */}
                 <div style={{
-                  height: '135px', backgroundColor: '#202124', borderRadius: '12px',
+                  aspectRatio: '16/9', backgroundColor: '#28292c', borderRadius: '12px',
                   border: '1px solid rgba(255,255,255,0.1)', position: 'relative',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
                   <div style={{
-                    width: '42px', height: '42px', borderRadius: '50%',
+                    width: '44px', height: '44px', borderRadius: '50%',
                     backgroundColor: '#f59e0b', color: '#ffffff', fontWeight: 700,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem'
                   }}>
                     KS
                   </div>
                   <div style={{
-                    position: 'absolute', bottom: '6px', left: '8px',
-                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '2px 6px', borderRadius: '4px',
-                    fontSize: '0.65rem', color: '#ffffff'
+                    position: 'absolute', bottom: '8px', left: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px',
+                    fontSize: '0.7rem', color: '#ffffff'
                   }}>
                     Kenji Suzuki
                   </div>
-                  <div style={{ position: 'absolute', bottom: '6px', right: '8px', backgroundColor: 'rgba(0,0,0,0.65)', padding: '3px', borderRadius: '50%' }}>
-                    <Mic size={11} color="#34a853" />
+                  <div style={{ position: 'absolute', bottom: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.7)', padding: '4px', borderRadius: '50%' }}>
+                    <Mic size={12} color="#34a853" />
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* GRID VIEW MODE: 6 Equal Video Cards */}
+          {/* GRID VIEW MODE: 6 Equal Aspect-Ratio Video Cards */}
           {stageMode === 'grid' && (
             <div style={{
               width: '100%', height: '100%',
-              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem'
+              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem'
             }}>
               {participants.slice(0, 6).map((p, i) => (
                 <div key={i} style={{
-                  backgroundColor: '#202124', borderRadius: '16px',
+                  backgroundColor: '#28292c', borderRadius: '16px',
                   border: p.isHost ? '2px solid #8ab4f8' : '1px solid rgba(255,255,255,0.1)',
                   position: 'relative', overflow: 'hidden',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 6px 16px rgba(0,0,0,0.4)'
                 }}>
                   {p.isHost && hasWebcamStream && webcamStreamRef.current ? (
                     <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{
                       width: '65px', height: '65px', borderRadius: '50%',
-                      background: p.isHost ? 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)' : 'rgba(255,255,255,0.1)',
+                      background: p.isHost ? 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)' : 'rgba(255,255,255,0.12)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: '#ffffff', fontWeight: 700, fontSize: '1.2rem'
                     }}>
@@ -996,7 +1009,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
 
                   <div style={{
                     position: 'absolute', bottom: '10px', left: '12px',
-                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '3px 8px', borderRadius: '6px',
+                    backgroundColor: 'rgba(0,0,0,0.75)', padding: '3px 8px', borderRadius: '6px',
                     fontSize: '0.75rem', color: '#ffffff', fontWeight: 600
                   }}>
                     {p.name} {p.isHost ? '👑' : ''}
@@ -1004,7 +1017,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
 
                   <div style={{
                     position: 'absolute', top: '10px', right: '12px',
-                    backgroundColor: 'rgba(0,0,0,0.6)', padding: '4px', borderRadius: '50%'
+                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '5px', borderRadius: '50%'
                   }}>
                     {p.isMuted ? <MicOff size={14} color="#ea4335" /> : <Mic size={14} color="#34a853" />}
                   </div>
@@ -1016,10 +1029,11 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           {/* SPOTLIGHT VIEW MODE */}
           {stageMode === 'spotlight' && (
             <div style={{
-              width: '100%', height: '100%', backgroundColor: '#202124',
+              width: '100%', height: '100%', backgroundColor: '#1e1f22',
               borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)',
               position: 'relative', overflow: 'hidden', display: 'flex',
-              alignItems: 'center', justifyContent: 'center'
+              alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 12px 32px rgba(0,0,0,0.5)'
             }}>
               {hasWebcamStream && webcamStreamRef.current ? (
                 <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1045,7 +1059,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
         {sidePanelTab && (
           <aside style={{
             width: '360px',
-            backgroundColor: '#202124',
+            backgroundColor: '#1e1f22',
             borderLeft: '1px solid rgba(255,255,255,0.1)',
             display: 'flex',
             flexDirection: 'column',
@@ -1053,7 +1067,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           }}>
             {/* Side Panel Header */}
             <div style={{
-              height: '56px', padding: '0 1.25rem',
+              height: '60px', padding: '0 1.25rem',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               borderBottom: '1px solid rgba(255,255,255,0.08)'
             }}>
@@ -1276,8 +1290,8 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
 
       {/* 4. Google Meet Bottom Floating Control Bar */}
       <footer style={{
-        height: '80px',
-        backgroundColor: '#202124',
+        height: '76px',
+        backgroundColor: '#1e1f22',
         borderTop: '1px solid rgba(255,255,255,0.08)',
         display: 'flex',
         alignItems: 'center',
