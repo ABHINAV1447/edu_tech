@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Send, Users, Mic, MicOff, Video as VideoIcon, VideoOff, Hand, Award, 
   Lock, Monitor, Disc, Info, MessageSquare, PhoneOff, 
-  Copy, Pin, Smile, LayoutGrid, X, Check, Search, Tv, Volume2
+  Copy, Pin, Smile, LayoutGrid, X, Check, Search, Tv, Volume2, Presentation, Play
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -56,7 +56,7 @@ interface FloatingReaction {
 export default function LiveClassroom({ user, purchasedCourseIds = [], onTriggerCheckout, onUploadRecording, setNavigationTab }: LiveClassroomProps) {
   // Navigation & Side Drawer states
   const [sidePanelTab, setSidePanelTab] = useState<'chat' | 'people' | 'info' | 'activities' | null>('chat');
-  const [stageMode, setStageMode] = useState<'presentation' | 'grid' | 'spotlight'>('presentation');
+  const [stageMode, setStageMode] = useState<'presentation' | 'grid' | 'spotlight'>('grid');
   
   // Load stream details set by dashboard
   const liveTitle = localStorage.getItem('skillnara_active_live_title') || 'Business Japanese: Keigo Honorifics';
@@ -124,8 +124,11 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
   const webcamStreamRef = useRef<MediaStream | null>(null);
   const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Screen Share & Recording states
+  // Screen Share & Presentation Slide states
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isPresentingSlides, setIsPresentingSlides] = useState(false);
+  const isAnyScreenOrSlideShared = isScreenSharing || isPresentingSlides;
+
   const [hasRealStream, setHasRealStream] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -143,14 +146,14 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
     if (!isCamOff && webcamVideoRef.current && webcamStreamRef.current) {
       webcamVideoRef.current.srcObject = webcamStreamRef.current;
     }
-  }, [isCamOff, hasWebcamStream, stageMode]);
+  }, [isCamOff, hasWebcamStream, stageMode, isAnyScreenOrSlideShared]);
 
   // Attach screen share MediaStream when element mounts
   useEffect(() => {
     if (isScreenSharing && screenVideoRef.current && screenStreamRef.current) {
       screenVideoRef.current.srcObject = screenStreamRef.current;
     }
-  }, [isScreenSharing, hasRealStream, stageMode]);
+  }, [isScreenSharing, hasRealStream, stageMode, isAnyScreenOrSlideShared]);
 
   const handleToggleCamera = async () => {
     if (!isCamOff) {
@@ -198,6 +201,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           screenStreamRef.current = stream;
           setHasRealStream(true);
           setIsScreenSharing(true);
+          setIsPresentingSlides(false);
 
           const videoTrack = stream.getVideoTracks()[0];
           if (videoTrack) {
@@ -212,10 +216,12 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           }
         } else {
           setIsScreenSharing(true);
+          setIsPresentingSlides(false);
         }
       } catch (err) {
         console.warn('Screen share display media cancelled or unavailable:', err);
         setIsScreenSharing(true);
+        setIsPresentingSlides(false);
       }
     }
   };
@@ -617,8 +623,41 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           </button>
         </div>
 
-        {/* Right: Layout Switcher, Time & Recording */}
+        {/* Right: Presentation / Call Status, Layout & Time */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          
+          {/* Quick Present Action Banner Button */}
+          {isTeacher && !isAnyScreenOrSlideShared && (
+            <button
+              onClick={() => setIsPresentingSlides(true)}
+              style={{
+                backgroundColor: 'rgba(138, 180, 248, 0.15)', border: '1px solid rgba(138, 180, 248, 0.4)',
+                color: '#8ab4f8', borderRadius: '20px', padding: '0.35rem 0.9rem', fontSize: '0.78rem',
+                fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer'
+              }}
+            >
+              <Presentation size={14} />
+              <span>Present Lecture Slides</span>
+            </button>
+          )}
+
+          {isAnyScreenOrSlideShared && (
+            <button
+              onClick={() => {
+                setIsPresentingSlides(false);
+                if (isScreenSharing) handleToggleScreenShare();
+              }}
+              style={{
+                backgroundColor: 'rgba(234, 67, 53, 0.2)', border: '1px solid rgba(234, 67, 53, 0.5)',
+                color: '#ea4335', borderRadius: '20px', padding: '0.35rem 0.9rem', fontSize: '0.78rem',
+                fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer'
+              }}
+            >
+              <X size={14} />
+              <span>Stop Presenting</span>
+            </button>
+          )}
+
           {isRecording && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: '0.45rem',
@@ -633,17 +672,6 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
           {/* Layout Mode Picker */}
           <div style={{ display: 'flex', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '3px' }}>
             <button
-              onClick={() => setStageMode('presentation')}
-              style={{
-                background: stageMode === 'presentation' ? '#8ab4f8' : 'transparent',
-                color: stageMode === 'presentation' ? '#202124' : '#e8eaed',
-                border: 'none', borderRadius: '16px', padding: '0.3rem 0.8rem',
-                fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
-              }}
-            >
-              Sidebar
-            </button>
-            <button
               onClick={() => setStageMode('grid')}
               style={{
                 background: stageMode === 'grid' ? '#8ab4f8' : 'transparent',
@@ -654,6 +682,17 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
             >
               <LayoutGrid size={13} />
               Grid
+            </button>
+            <button
+              onClick={() => setStageMode('presentation')}
+              style={{
+                background: stageMode === 'presentation' ? '#8ab4f8' : 'transparent',
+                color: stageMode === 'presentation' ? '#202124' : '#e8eaed',
+                border: 'none', borderRadius: '16px', padding: '0.3rem 0.8rem',
+                fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
+              }}
+            >
+              Sidebar
             </button>
             <button
               onClick={() => setStageMode('spotlight')}
@@ -707,11 +746,11 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
             ))}
           </div>
 
-          {/* PRESENTATION MODE: Main Presentation Box + Side Video Tile Strip */}
-          {stageMode === 'presentation' && (
+          {/* DYNAMIC CASE A: SCREEN SHARE OR SLIDES PRESENTATION IS ACTIVE */}
+          {isAnyScreenOrSlideShared ? (
             <div style={{ width: '100%', height: '100%', display: 'flex', gap: '1.25rem' }}>
               
-              {/* Main Center Presentation Stage */}
+              {/* Main Center Shared Screen / Presentation Stage */}
               <div style={{
                 flex: 1,
                 backgroundColor: '#1e1f22',
@@ -765,7 +804,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                     </div>
                   )
                 ) : (
-                  // Default Slide Presentation View
+                  // Lecture Slide Presentation View
                   <div style={{
                     padding: '2.5rem', color: '#ffffff', width: '100%', height: '100%',
                     display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
@@ -865,14 +904,6 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                     <span>{defaultInstructorName}</span>
                   </div>
 
-                  <div style={{
-                    position: 'absolute', bottom: '8px', right: '8px',
-                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '4px', borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <Volume2 size={12} color="#34a853" />
-                  </div>
-
                   <button
                     onClick={() => setPinnedUser(pinnedUser === 'instructor' ? null : 'instructor')}
                     style={{
@@ -880,9 +911,18 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                       background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',
                       width: '24px', height: '24px', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
                     }}
+                    title="Pin to main screen"
                   >
                     <Pin size={12} />
                   </button>
+
+                  <div style={{
+                    position: 'absolute', bottom: '8px', right: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.7)', padding: '4px', borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <Volume2 size={12} color="#34a853" />
+                  </div>
                 </div>
 
                 {/* 2. Student (You) Video Tile */}
@@ -978,78 +1018,97 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                 </div>
               </div>
             </div>
-          )}
-
-          {/* GRID VIEW MODE: 6 Equal Aspect-Ratio Video Cards */}
-          {stageMode === 'grid' && (
-            <div style={{
-              width: '100%', height: '100%',
-              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem'
-            }}>
-              {participants.slice(0, 6).map((p, i) => (
-                <div key={i} style={{
-                  backgroundColor: '#28292c', borderRadius: '16px',
-                  border: p.isHost ? '2px solid #8ab4f8' : '1px solid rgba(255,255,255,0.1)',
-                  position: 'relative', overflow: 'hidden',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 6px 16px rgba(0,0,0,0.4)'
-                }}>
-                  {p.isHost && hasWebcamStream && webcamStreamRef.current ? (
-                    <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{
-                      width: '65px', height: '65px', borderRadius: '50%',
-                      background: p.isHost ? 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)' : 'rgba(255,255,255,0.12)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#ffffff', fontWeight: 700, fontSize: '1.2rem'
-                    }}>
-                      {p.avatar}
-                    </div>
-                  )}
-
-                  <div style={{
-                    position: 'absolute', bottom: '10px', left: '12px',
-                    backgroundColor: 'rgba(0,0,0,0.75)', padding: '3px 8px', borderRadius: '6px',
-                    fontSize: '0.75rem', color: '#ffffff', fontWeight: 600
-                  }}>
-                    {p.name} {p.isHost ? '👑' : ''}
-                  </div>
-
-                  <div style={{
-                    position: 'absolute', top: '10px', right: '12px',
-                    backgroundColor: 'rgba(0,0,0,0.65)', padding: '5px', borderRadius: '50%'
-                  }}>
-                    {p.isMuted ? <MicOff size={14} color="#ea4335" /> : <Mic size={14} color="#34a853" />}
-                  </div>
+          ) : (
+            
+            /* DYNAMIC CASE B: DEFAULT GOOGLE MEET PARTICIPANT CALL GRID VIEW (WHEN NO SCREEN IS SHARED) */
+            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: '1rem', position: 'relative' }}>
+              
+              {/* Meeting Call Header Bar Banner */}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                backgroundColor: 'rgba(255,255,255,0.04)', padding: '0.5rem 1rem', borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.08)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#9aa0a6' }}>
+                  <Users size={16} color="#8ab4f8" />
+                  <span>Call Active • Joined Participants ({participants.length})</span>
                 </div>
-              ))}
-            </div>
-          )}
+                {isTeacher && (
+                  <button
+                    onClick={() => setIsPresentingSlides(true)}
+                    style={{
+                      backgroundColor: 'rgba(138, 180, 248, 0.15)', border: '1px solid rgba(138, 180, 248, 0.3)',
+                      color: '#8ab4f8', padding: '0.35rem 0.9rem', borderRadius: '20px', fontSize: '0.78rem',
+                      fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer'
+                    }}
+                  >
+                    <Play size={13} />
+                    <span>Present Lecture Slides</span>
+                  </button>
+                )}
+              </div>
 
-          {/* SPOTLIGHT VIEW MODE */}
-          {stageMode === 'spotlight' && (
-            <div style={{
-              width: '100%', height: '100%', backgroundColor: '#1e1f22',
-              borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)',
-              position: 'relative', overflow: 'hidden', display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 12px 32px rgba(0,0,0,0.5)'
-            }}>
-              {hasWebcamStream && webcamStreamRef.current ? (
-                <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{
-                    width: '140px', height: '140px', borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+              {/* Joined Participants Video Grid (Fills Stage cleanly like Google Meet) */}
+              <div style={{
+                flex: 1,
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '1.25rem'
+              }}>
+                {participants.slice(0, 6).map((p, i) => (
+                  <div key={i} style={{
+                    backgroundColor: '#28292c', borderRadius: '16px',
+                    border: p.isHost ? '2px solid #8ab4f8' : '1px solid rgba(255,255,255,0.1)',
+                    position: 'relative', overflow: 'hidden',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#ffffff', fontSize: '2.5rem', fontWeight: 800, margin: '0 auto 1rem auto'
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
                   }}>
-                    {defaultInstructorInitials}
+                    {p.isHost && hasWebcamStream && webcamStreamRef.current ? (
+                      <video ref={webcamVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{
+                        width: '72px', height: '72px', borderRadius: '50%',
+                        background: p.isHost ? 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)' : 'rgba(255,255,255,0.12)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#ffffff', fontWeight: 700, fontSize: '1.4rem',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                      }}>
+                        {p.avatar}
+                      </div>
+                    )}
+
+                    <div style={{
+                      position: 'absolute', bottom: '12px', left: '14px',
+                      backgroundColor: 'rgba(0,0,0,0.75)', padding: '4px 10px', borderRadius: '6px',
+                      fontSize: '0.8rem', color: '#ffffff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem'
+                    }}>
+                      <span>{p.name}</span>
+                      {p.isHost && <span style={{ fontSize: '0.75rem' }}>👑</span>}
+                    </div>
+
+                    <div style={{
+                      position: 'absolute', top: '12px', right: '14px',
+                      backgroundColor: 'rgba(0,0,0,0.65)', padding: '6px', borderRadius: '50%'
+                    }}>
+                      {p.isMuted ? <MicOff size={15} color="#ea4335" /> : <Mic size={15} color="#34a853" />}
+                    </div>
                   </div>
-                  <h3 style={{ fontSize: '1.25rem', color: '#ffffff' }}>{defaultInstructorName} (Active Presenter)</h3>
+                ))}
+              </div>
+
+              {/* Subtitles / Closed Captions Overlay Banner in Call View */}
+              {showCaptions && (
+                <div style={{
+                  position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)',
+                  backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+                  padding: '0.6rem 1.4rem', borderRadius: '8px',
+                  color: '#ffffff', fontSize: '0.9rem', maxWidth: '82%', textAlign: 'center',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 30, border: '1px solid rgba(255,255,255,0.12)'
+                }}>
+                  <span>{captionSubtitles[captionIndex]}</span>
                 </div>
               )}
+
             </div>
           )}
 
@@ -1394,7 +1453,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
             )}
           </div>
 
-          {/* Present Screen */}
+          {/* Present Screen / Stop Presenting Toggle */}
           {isTeacher && (
             <button
               onClick={handleToggleScreenShare}
@@ -1405,7 +1464,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                 border: 'none', display: 'flex', alignItems: 'center',
                 justifyContent: 'center', cursor: 'pointer'
               }}
-              title={isScreenSharing ? 'Stop presenting' : 'Present now'}
+              title={isScreenSharing ? 'Stop presenting screen' : 'Present screen now'}
             >
               <Monitor size={20} />
             </button>
