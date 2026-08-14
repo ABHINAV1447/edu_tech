@@ -7,6 +7,7 @@ import RecordedArchive from './components/RecordedArchive';
 import Login from './components/Login';
 import CheckoutModal from './components/CheckoutModal';
 import AboutUs from './components/AboutUs';
+import SkillBotWidget from './components/SkillBotWidget';
 import './App.css';
 
 interface RecordedLesson {
@@ -298,6 +299,12 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Global SkillBot AI Assistant Floating Widget */}
+      <SkillBotWidget
+        onNavigateTab={setActiveTab}
+        onTriggerCheckout={(course) => setCheckoutCourse(course)}
+      />
     </div>
   );
 }
