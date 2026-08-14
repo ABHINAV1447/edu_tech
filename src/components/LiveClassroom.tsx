@@ -192,9 +192,64 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
 
   // Screen Share & Recording states
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [hasRealStream, setHasRealStream] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showPublishModal, setShowPublishModal] = useState(false);
+
+  // Real Screen Sharing MediaStream refs
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Attach active MediaStream to screenVideoRef element whenever screen sharing renders
+  useEffect(() => {
+    if (isScreenSharing && screenVideoRef.current && screenStreamRef.current) {
+      screenVideoRef.current.srcObject = screenStreamRef.current;
+    }
+  }, [isScreenSharing, hasRealStream]);
+
+  const handleToggleScreenShare = async () => {
+    if (isScreenSharing) {
+      // Stop screen sharing
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+        screenStreamRef.current = null;
+      }
+      setHasRealStream(false);
+      setIsScreenSharing(false);
+    } else {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true
+          });
+          screenStreamRef.current = stream;
+          setHasRealStream(true);
+          setIsScreenSharing(true);
+
+          // Handle user clicking native browser "Stop sharing" floating bar
+          const videoTrack = stream.getVideoTracks()[0];
+          if (videoTrack) {
+            videoTrack.onended = () => {
+              if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach(track => track.stop());
+                screenStreamRef.current = null;
+              }
+              setHasRealStream(false);
+              setIsScreenSharing(false);
+            };
+          }
+        } else {
+          setIsScreenSharing(true);
+        }
+      } catch (err) {
+        console.warn('Screen share display media cancelled or unavailable:', err);
+        // Fallback to simulated workspace view if user cancels browser prompt
+        setIsScreenSharing(true);
+      }
+    }
+  };
 
   // Form states to publish recording
   const [publishDescription, setPublishDescription] = useState(`Recorded live lecture covering "${liveTitle}". Key discussions included language structures, interactive quizzes, and student whiteboard activities.`);
@@ -487,41 +542,53 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
             
             {/* If Teacher is sharing SLIDES */}
             {isScreenSharing ? (
-              // Teacher Screen Share View simulation
-              <div style={{
-                padding: '1.5rem', color: '#ffffff', width: '100%', height: '100%',
-                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                background: 'linear-gradient(135deg, #1e1e1e 0%, #0d0d0d 100%)',
-                fontFamily: 'monospace', fontSize: '0.8rem'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem', color: '#a3a3a3' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary)' }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary)', animation: 'pulse-slow 1s infinite alternate' }}></span>
-                    Screen Share: {defaultInstructorName}\'s Workspace
-                  </span>
-                  <span>VS Code - skillnara_workspace</span>
+              hasRealStream && screenStreamRef.current ? (
+                <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <video
+                    ref={screenVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
                 </div>
-                
-                {/* Simulated IDE Code content */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', fontFamily: 'monospace', color: '#f8f8f2', lineHeight: '1.4', margin: 'auto 0', paddingLeft: '1rem' }}>
-                  <p style={{ color: '#75715e' }}>// Simulated Code Editor</p>
-                  <p><span style={{ color: '#f92672' }}>import</span> React, {'{'} useState {'}'} <span style={{ color: '#f92672' }}>from</span> <span style={{ color: '#e6db74' }}>'react'</span>;</p>
-                  <p><span style={{ color: '#66d9ef' }}>function</span> <span style={{ color: '#a6e22e' }}>KeigoEtiquette</span>() {'{'}</p>
-                  <p>&nbsp;&nbsp;<span style={{ color: '#66d9ef' }}>const</span> [status, setStatus] = <span style={{ color: '#a6e22e' }}>useState</span>(<span style={{ color: '#e6db74' }}>"polite"</span>);</p>
-                  <p>&nbsp;&nbsp;<span style={{ color: '#f92672' }}>return</span> (</p>
-                  <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>div</span> className=<span style={{ color: '#e6db74' }}>"keigo-container"</span>&gt;</p>
-                  <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>h3</span>&gt;Humble Verb: いただく (itadaku) - {'{'}status{'}'}&lt;/<span style={{ color: '#f92672' }}>h3</span>&gt;</p>
-                  <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span style={{ color: '#f92672' }}>div</span>&gt;</p>
-                  <p>&nbsp;&nbsp;);</p>
-                  <p>{'}'}</p>
-                </div>
+              ) : (
+                // Teacher Screen Share View simulation (fallback)
+                <div style={{
+                  padding: '3.5rem 1.5rem 1.5rem 1.5rem', color: '#ffffff', width: '100%', height: '100%',
+                  display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                  background: 'linear-gradient(135deg, #1e1e1e 0%, #0d0d0d 100%)',
+                  fontFamily: 'monospace', fontSize: '0.8rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem', color: '#a3a3a3' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary)' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--primary)', animation: 'pulse-slow 1s infinite alternate' }}></span>
+                      Screen Share: Workspace Preview
+                    </span>
+                    <span>VS Code - skillnara_workspace</span>
+                  </div>
+                  
+                  {/* Simulated IDE Code content */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', fontFamily: 'monospace', color: '#f8f8f2', lineHeight: '1.4', margin: 'auto 0', paddingLeft: '1rem' }}>
+                    <p style={{ color: '#75715e' }}>// Simulated Code Editor</p>
+                    <p><span style={{ color: '#f92672' }}>import</span> React, {'{'} useState {'}'} <span style={{ color: '#f92672' }}>from</span> <span style={{ color: '#e6db74' }}>'react'</span>;</p>
+                    <p><span style={{ color: '#66d9ef' }}>function</span> <span style={{ color: '#a6e22e' }}>KeigoEtiquette</span>() {'{'}</p>
+                    <p>&nbsp;&nbsp;<span style={{ color: '#66d9ef' }}>const</span> [status, setStatus] = <span style={{ color: '#a6e22e' }}>useState</span>(<span style={{ color: '#e6db74' }}>"polite"</span>);</p>
+                    <p>&nbsp;&nbsp;<span style={{ color: '#f92672' }}>return</span> (</p>
+                    <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>div</span> className=<span style={{ color: '#e6db74' }}>"keigo-container"</span>&gt;</p>
+                    <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style={{ color: '#f92672' }}>h3</span>&gt;Humble Verb: いただく (itadaku) - {'{'}status{'}'}&lt;/<span style={{ color: '#f92672' }}>h3</span>&gt;</p>
+                    <p>&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span style={{ color: '#f92672' }}>div</span>&gt;</p>
+                    <p>&nbsp;&nbsp;);</p>
+                    <p>{'}'}</p>
+                  </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#75715e', fontSize: '0.7rem' }}>
-                  <span>Ln 12, Col 24</span>
-                  <span>UTF-8</span>
-                  <span>TypeScript React</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#75715e', fontSize: '0.7rem' }}>
+                    <span>Ln 12, Col 24</span>
+                    <span>UTF-8</span>
+                    <span>TypeScript React</span>
+                  </div>
                 </div>
-              </div>
+              )
             ) : teacherView === 'slides' ? (
               <div style={{
                 padding: '2.5rem', color: '#ffffff', width: '100%', height: '100%',
@@ -622,11 +689,11 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
               </div>
             )}
 
-            {/* Simulated Live indicator */}
+            {/* Simulated Live indicator & status badges */}
             <div style={{
               position: 'absolute', top: '1rem', left: '1rem',
               display: 'flex', alignItems: 'center', gap: '0.6rem',
-              zIndex: 5
+              zIndex: 15
             }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '0.4rem',
@@ -637,6 +704,18 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
                 <span style={{ width: '6px', height: '6px', backgroundColor: '#ffffff', borderRadius: '50%', display: 'inline-block', animation: 'pulse-slow 1s infinite alternate' }}></span>
                 Live Broadcast
               </div>
+
+              {isScreenSharing && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '0.4rem',
+                  backgroundColor: 'rgba(59, 130, 246, 0.9)', padding: '0.25rem 0.6rem',
+                  borderRadius: '4px', color: '#ffffff', fontSize: '0.75rem', fontWeight: 800,
+                  border: '1px solid rgba(59, 130, 246, 0.4)'
+                }}>
+                  <Monitor size={13} />
+                  <span>{hasRealStream ? 'Sharing Live Screen' : 'Screen Share Active'}</span>
+                </div>
+              )}
 
               {isRecording && (
                 <div style={{
@@ -689,14 +768,14 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
               {isTeacher && (
                 <>
                   <button
-                    onClick={() => setIsScreenSharing(!isScreenSharing)}
+                    onClick={handleToggleScreenShare}
                     className={`btn btn-sm ${isScreenSharing ? 'btn-primary' : 'btn-ghost'}`}
                     style={{
                       borderRadius: '50%', width: '40px', height: '40px', padding: 0,
                       border: isScreenSharing ? '1px solid var(--primary)' : '1px solid var(--border-color)',
                       color: isScreenSharing ? 'var(--primary)' : 'inherit'
                     }}
-                    title={isScreenSharing ? 'Stop sharing screen' : 'Share screen'}
+                    title={isScreenSharing ? 'Stop sharing screen' : 'Share your screen live'}
                   >
                     <Monitor size={18} />
                   </button>
