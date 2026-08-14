@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCw, Volume2, Download, Search, Clock, MessageSquare, List, Lock } from 'lucide-react';
+import { Play, Pause, RotateCw, Volume2, Download, Search, Clock, MessageSquare, List, Lock, Bot, Send, Sparkles } from 'lucide-react';
 
 interface RecordedLesson {
   id: string;
@@ -38,10 +38,18 @@ interface RecordedArchiveProps {
   onTriggerCheckout?: (course: CourseType) => void;
 }
 
+interface AiChatMessage {
+  id: string;
+  sender: 'user' | 'bot';
+  text: string;
+  time: string;
+}
+
 export default function RecordedArchive({ recordedLessons, purchasedCourseIds = [], onTriggerCheckout }: RecordedArchiveProps) {
   const [selectedCourse, setSelectedCourse] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeLessonId, setActiveLessonId] = useState<string>(recordedLessons[0]?.id || '');
+  const [bottomTab, setBottomTab] = useState<'transcript' | 'chat' | 'bot'>('bot');
 
   const lessons = recordedLessons;
   const activeLesson = lessons.find(l => l.id === activeLessonId) || lessons[0];
@@ -71,6 +79,71 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const timerRef = useRef<any>(null);
 
+  // SkillBot AI Tutor States
+  const [aiChatMessages, setAiChatMessages] = useState<AiChatMessage[]>([
+    {
+      id: '1',
+      sender: 'bot',
+      text: `Hello! I'm SkillBot 🤖, your AI tutor for "${activeLesson?.title || 'this lesson'}". Ask me anything about grammar rules, code snippets, or lesson summaries!`,
+      time: 'Just now'
+    }
+  ]);
+  const [aiInput, setAiInput] = useState('');
+  const [isAiThinking, setIsAiThinking] = useState(false);
+
+  // Reset AI conversation when switching lessons
+  useEffect(() => {
+    setAiChatMessages([
+      {
+        id: '1',
+        sender: 'bot',
+        text: `Hello! I'm SkillBot 🤖, your AI tutor for "${activeLesson?.title}". Feel free to ask me to explain concepts, generate quick practice questions, or clarify lesson notes!`,
+        time: 'Just now'
+      }
+    ]);
+  }, [activeLessonId]);
+
+  const handleSendAiQuestion = (questionText?: string) => {
+    const textToSend = questionText || aiInput;
+    if (!textToSend.trim()) return;
+
+    const userMsg: AiChatMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: textToSend.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setAiChatMessages(prev => [...prev, userMsg]);
+    if (!questionText) setAiInput('');
+    setIsAiThinking(true);
+
+    setTimeout(() => {
+      let botAnswer = `Great question! In "${activeLesson.title}", the instructor highlights how to apply these rules in practical scenarios.`;
+
+      const q = textToSend.toLowerCase();
+      if (q.includes('difference') || q.includes('sonkeigo') || q.includes('kenjougo') || q.includes('keigo')) {
+        botAnswer = `💡 **Keigo Breakdown**:\n\n1. **Sonkeigo (尊敬語 - Respectful)**: Used when speaking about the actions of clients, seniors, or superiors (e.g. 召し上がる - meshiagarimasu).\n2. **Kenjougo (謙譲語 - Humble)**: Used when speaking humbly about your own actions to show respect to senior clients (e.g. いただく - itadaku).`;
+      } else if (q.includes('summary') || q.includes('key takeaways')) {
+        botAnswer = `📌 **Key Takeaways for ${activeLesson.title}**:\n\n- Mastered essential terminology and practical application.\n- Reviewed common student mistakes and core structures.\n- Download the attached PDF slides below to practice the homework exercise.`;
+      } else if (q.includes('practice') || q.includes('quiz') || q.includes('question')) {
+        botAnswer = `❓ **Quick Practice Question**:\nWhat is the humble (Kenjougo) verb form of "to eat / drink"?\n\nA) 召し上がる\nB) いただく (Correct)\nC) たべます`;
+      } else if (q.includes('particle') || q.includes('wa') || q.includes('ga')) {
+        botAnswer = `✨ **Particle Wa vs Ga**:\n\n- **は (Wa)**: Marks the overarching TOPIC of the sentence ("As for X...").\n- **が (Ga)**: Highlights the specific SUBJECT or focus of the predicate.`;
+      }
+
+      const botMsg: AiChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'bot',
+        text: botAnswer,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setAiChatMessages(prev => [...prev, botMsg]);
+      setIsAiThinking(false);
+    }, 900);
+  };
+
   // Transcript and historical chat database
   const transcripts: Record<string, TranscriptLine[]> = {
     'n5-particles': [
@@ -98,52 +171,43 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
     ]
   };
 
-  const chats: Record<string, HistoricalChat[]> = {
+  const historicalChats: Record<string, HistoricalChat[]> = {
     'n5-particles': [
-      { time: 5, sender: 'Emily Brown', message: 'Hello! Watching from London.' },
-      { time: 16, sender: 'John Doe', message: 'Yes! The は/が difference is so hard. Glad we are covering this.' },
-      { time: 38, sender: 'Sarah Lee', message: 'So "wa" is like "speaking of..."?' },
-      { time: 58, sender: 'Aimi Suzuki', message: '私は寿司が好きです - I like sushi. Easy particle sentence!' },
-      { time: 78, sender: 'John Doe', message: 'Ah! Sushi is the object, but it gets particle が. Got it.' },
-      { time: 100, sender: 'Emily Brown', message: 'Thanks Sensei! Brilliant explanation.' }
+      { time: 5, sender: 'Aimi S.', message: 'Konbanwa teacher! 🎉' },
+      { time: 18, sender: 'John D.', message: 'Ah, I always mix up wa and ga!' },
+      { time: 40, sender: 'Kenji M.', message: 'So wa is for background topic?' },
+      { time: 60, sender: 'Aimi S.', message: 'Watashi wa ramen ga suki desu! 🍜' },
+      { time: 80, sender: 'Priya K.', message: 'Makes total sense now, thank you!' }
     ],
     'biz-keigo': [
-      { time: 5, sender: 'Kenji Suzuki', message: 'Keigo is scary for new hires in Japan.' },
-      { time: 25, sender: 'Sarah Lee', message: 'Is Sonkeigo used for coworkers?' },
-      { time: 55, sender: 'Bhawna Ma\'am (Sensei)', message: 'No, Sarah. For peers, normal polite forms (Desu/Masu) are fine.' },
-      { time: 85, sender: 'Kenji Suzuki', message: 'Meshiagaru sounds very fancy.' },
-      { time: 120, sender: 'John Doe', message: 'Downloading the PDF now, thank you.' }
-    ],
-    'n4-passives': [
-      { time: 10, sender: 'Emily Brown', message: 'Passive verbs conjugation is confusing.' },
-      { time: 45, sender: 'Kenji Suzuki', message: 'Ame ni furareta sounds poetic.' },
-      { time: 70, sender: 'Aimi Suzuki', message: 'Ah, so I express my sadness about the rain with passive!' },
-      { time: 95, sender: 'Emily Brown', message: 'Makes perfect sense now.' }
+      { time: 10, sender: 'Rohan P.', message: 'Keigo is essential for Japanese corporate interviews.' },
+      { time: 30, sender: 'Sarah M.', message: 'Is Sonkeigo used when addressing clients?' },
+      { time: 55, sender: 'Rohan P.', message: 'Yes! Always show respect to clients.' },
+      { time: 85, sender: 'Aimi S.', message: 'Meshiagaru is a classic example.' }
     ]
   };
 
-  const activeTranscript = transcripts[activeLesson.id] || [];
-  const activeChats = chats[activeLesson.id] || [];
+  const activeTranscript = transcripts[activeLesson.id] || [
+    { time: 0, speaker: activeLesson.instructor, text: `Welcome to ${activeLesson.title}.` },
+    { time: 15, speaker: activeLesson.instructor, text: `In this recorded session, we cover core principles of ${activeLesson.course}.` },
+    { time: 45, speaker: activeLesson.instructor, text: `Review the attached notes below to complete your practice assignment.` }
+  ];
 
-  // Filter lessons
-  const filteredLessons = lessons.filter(l => {
-    const matchesSearch = l.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          l.instructor.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCourse = selectedCourse === 'All' || l.course.includes(selectedCourse);
-    return matchesSearch && matchesCourse;
-  });
+  const activeHistoricalChats = historicalChats[activeLesson.id] || [
+    { time: 5, sender: 'Student Learner', message: 'Hello teacher! Great class.' },
+    { time: 20, sender: 'Tech Enthusiast', message: 'Clear explanation.' }
+  ];
 
-  // Handle video playback tick
+  // Playback timer effect
   useEffect(() => {
     if (isPlaying) {
       timerRef.current = setInterval(() => {
-        setCurrentTime((prev) => {
-          if (prev >= activeLesson.totalTimeSeconds) {
+        setCurrentTime((prevTime) => {
+          if (prevTime >= activeLesson.totalTimeSeconds) {
             setIsPlaying(false);
-            clearInterval(timerRef.current!);
-            return activeLesson.totalTimeSeconds;
+            return 0;
           }
-          return prev + 1;
+          return prevTime + 1;
         });
       }, 1000 / playbackSpeed);
     } else {
@@ -153,48 +217,68 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isPlaying, activeLesson, playbackSpeed]);
+  }, [isPlaying, activeLesson.totalTimeSeconds, playbackSpeed]);
+
+  const handlePlayPause = () => {
+    if (!isPurchased) {
+      onTriggerCheckout && onTriggerCheckout({
+        id: activeCourseId,
+        title: activeLesson.course,
+        price: coursePrices[activeCourseId] || '$159'
+      });
+      return;
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentTime(parseInt(e.target.value));
+  };
 
   const handleLessonClick = (lesson: RecordedLesson) => {
-    setIsPlaying(false);
-    setCurrentTime(0);
     setActiveLessonId(lesson.id);
+    setCurrentTime(0);
+    setIsPlaying(false);
   };
 
-  const handleTranscriptClick = (time: number) => {
-    setCurrentTime(time);
-    if (!isPlaying) {
-      setIsPlaying(true);
-    }
+  const handleTranscriptClick = (seconds: number) => {
+    if (!isPurchased) return;
+    setCurrentTime(seconds);
   };
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, '0');
-    const s = Math.floor(secs % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+  const formatTime = (totalSecs: number) => {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = Math.floor(totalSecs % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Find active transcript index based on currentTime
-  const getActiveTranscriptIndex = () => {
-    for (let i = activeTranscript.length - 1; i >= 0; i--) {
-      if (currentTime >= activeTranscript[i].time) {
-        return i;
-      }
-    }
-    return 0;
-  };
+  const activeTranscriptIndex = activeTranscript.reduce((acc, line, idx) => {
+    if (currentTime >= line.time) return idx;
+    return acc;
+  }, 0);
 
-  const activeTranscriptIndex = getActiveTranscriptIndex();
+  const visibleChats = activeHistoricalChats.filter(c => currentTime >= c.time);
 
-  // Filter chats that occurred before or at the current time
-  const visibleChats = activeChats.filter(c => currentTime >= c.time);
+  const filteredLessons = lessons.filter(l => {
+    const matchesCourse = selectedCourse === 'All' || l.course.includes(selectedCourse);
+    const matchesSearch = l.title.toLowerCase().includes(searchQuery.toLowerCase()) || l.instructor.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCourse && matchesSearch;
+  });
 
   return (
-    <div className="container animate-fade-in" style={{ padding: '3rem 0', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+    <div className="container animate-fade-in" style={{ padding: '2.5rem 1rem 5rem 1rem' }}>
       
-      <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-        <h1 style={{ fontSize: '2.25rem', marginBottom: '0.25rem' }}>Recorded Classes Archive</h1>
-        <p>Catch up on missed classes or review completed lessons with synchronized transcripts and chat playback.</p>
+      {/* Page Header */}
+      <div style={{ textAlign: 'center', maxWidth: '700px', margin: '0 auto 3rem auto' }}>
+        <span className="gradient-text" style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          On-Demand Learning Library
+        </span>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginTop: '0.25rem' }}>
+          Recorded Live Archives & AI Assistant
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', fontSize: '1.05rem' }}>
+          Replay previous live classes, navigate synced interactive transcripts, download lesson resources, and chat with SkillBot AI.
+        </p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '0.7fr 1.3fr', gap: '2rem' }} className="archive-layout">
@@ -235,7 +319,7 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
           </div>
 
           {/* Lesson List */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '420px', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '450px', overflowY: 'auto' }}>
             {filteredLessons.map(l => {
               const isActive = l.id === activeLesson.id;
               return (
@@ -266,7 +350,7 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
           </div>
         </div>
 
-        {/* Right Column: Player and Interactive Transcript/Chat */}
+        {/* Right Column: Player and Interactive Tabs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
           {/* Active Lesson Header */}
@@ -314,7 +398,7 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
                   </p>
                 </div>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '340px' }}>
-                  Enroll in this course to unlock high-definition playback, sync transcript seek navigation, materials download, and historical chat logs.
+                  Enroll in this course to unlock high-definition playback, sync transcript seek navigation, materials download, and SkillBot AI tutor support.
                 </p>
                 <button
                   onClick={() => onTriggerCheckout && onTriggerCheckout({
@@ -330,6 +414,7 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
                 </button>
               </div>
             )}
+
             {/* Visual Screen Cover */}
             <div style={{
               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -349,60 +434,49 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
                 </p>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginTop: '1.5rem', fontSize: '0.9rem', color: '#a5b4fc', fontFamily: 'monospace' }}>
                   <span>Time: {formatTime(currentTime)}</span>
-                  <span>Speed: {playbackSpeed}x</span>
+                  <span>/</span>
+                  <span>{formatTime(activeLesson.totalTimeSeconds)}</span>
                 </div>
               </div>
-
-              {/* Big play button on screen when paused */}
-              {!isPlaying && (
-                <button
-                  onClick={() => setIsPlaying(true)}
-                  style={{
-                    position: 'absolute', width: '60px', height: '60px', borderRadius: '50%',
-                    backgroundColor: 'rgba(99, 102, 241, 0.85)', color: '#ffffff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', border: 'none', transition: 'transform 0.2s ease',
-                    boxShadow: '0 8px 24px rgba(99, 102, 241, 0.4)'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                >
-                  <Play size={24} fill="#ffffff" style={{ marginLeft: '4px' }} />
-                </button>
-              )}
             </div>
 
-            {/* Video Controls Bar */}
+            {/* Video Player Controls Bar */}
             <div style={{
-              backgroundColor: 'rgba(15, 23, 42, 0.95)', padding: '0.75rem 1.25rem',
-              display: 'flex', flexDirection: 'column', gap: '0.5rem', zIndex: 10
+              padding: '0.75rem 1.25rem', backgroundColor: 'rgba(0,0,0,0.85)',
+              display: 'flex', flexDirection: 'column', gap: '0.5rem'
             }}>
-              {/* Scrub timeline */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ fontSize: '0.75rem', color: '#cbd5e1', fontFamily: 'monospace' }}>{formatTime(currentTime)}</span>
-                <input
-                  type="range" min="0" max={activeLesson.totalTimeSeconds}
-                  value={currentTime}
-                  onChange={(e) => setCurrentTime(parseInt(e.target.value))}
-                  style={{ flex: 1, height: '4px', accentColor: 'var(--primary)', cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '0.75rem', color: '#cbd5e1', fontFamily: 'monospace' }}>{formatTime(activeLesson.totalTimeSeconds)}</span>
-              </div>
+              {/* Seek Slider Bar */}
+              <input
+                type="range"
+                min={0}
+                max={activeLesson.totalTimeSeconds}
+                value={currentTime}
+                onChange={handleSeek}
+                style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer' }}
+              />
 
-              {/* Action Buttons */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <button onClick={() => setIsPlaying(!isPlaying)} style={{ color: '#ffffff', cursor: 'pointer' }}>
-                    {isPlaying ? <Pause size={18} fill="#ffffff" /> : <Play size={18} fill="#ffffff" />}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <button
+                    onClick={handlePlayPause}
+                    style={{
+                      background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}
+                  >
+                    {isPlaying ? <Pause size={20} /> : <Play size={20} />}
                   </button>
-                  <button onClick={() => setCurrentTime(0)} style={{ color: '#ffffff', cursor: 'pointer' }} title="Restart">
+                  <button
+                    onClick={() => setCurrentTime(0)}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                    title="Restart"
+                  >
                     <RotateCw size={16} />
                   </button>
                   <Volume2 size={16} style={{ color: '#cbd5e1' }} />
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  {/* Playback speed selector */}
                   <select
                     value={playbackSpeed}
                     onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
@@ -420,12 +494,136 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
             </div>
           </div>
 
-          {/* Tabbed Transcript vs Chat Playback */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.5rem' }} className="timeline-elements">
-            
-            {/* Transcript Panel */}
-            <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', height: '350px' }}>
-              <h3 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {/* Interactive Navigation Tabs: Transcript | Chat | SkillBot AI */}
+          <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+            <button
+              onClick={() => setBottomTab('bot')}
+              className={`btn btn-sm ${bottomTab === 'bot' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ borderRadius: '20px', gap: '0.4rem', fontSize: '0.8rem' }}
+            >
+              <Bot size={15} />
+              <span>SkillBot AI Tutor</span>
+            </button>
+            <button
+              onClick={() => setBottomTab('transcript')}
+              className={`btn btn-sm ${bottomTab === 'transcript' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ borderRadius: '20px', gap: '0.4rem', fontSize: '0.8rem' }}
+            >
+              <Clock size={15} />
+              <span>Interactive Transcript</span>
+            </button>
+            <button
+              onClick={() => setBottomTab('chat')}
+              className={`btn btn-sm ${bottomTab === 'chat' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ borderRadius: '20px', gap: '0.4rem', fontSize: '0.8rem' }}
+            >
+              <MessageSquare size={15} />
+              <span>Chat Replay</span>
+            </button>
+          </div>
+
+          {/* TAB CONTENT PANEL */}
+          {bottomTab === 'bot' && (
+            <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', height: '360px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Sparkles size={16} />
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: '0.95rem', fontWeight: 700 }}>SkillBot AI Tutor</h4>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Ask questions about "{activeLesson.title}"</span>
+                  </div>
+                </div>
+
+                {/* AI Preset Chips */}
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  <button
+                    onClick={() => handleSendAiQuestion('Explain Sonkeigo vs Kenjougo rules')}
+                    style={{ background: 'var(--primary-glow)', border: '1px solid var(--border-color)', color: 'var(--primary)', padding: '0.2rem 0.55rem', borderRadius: '12px', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Grammar Rules
+                  </button>
+                  <button
+                    onClick={() => handleSendAiQuestion('Give key takeaways')}
+                    style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid var(--border-color)', color: 'var(--accent-mint)', padding: '0.2rem 0.55rem', borderRadius: '12px', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Key Points
+                  </button>
+                  <button
+                    onClick={() => handleSendAiQuestion('Give 1 practice question')}
+                    style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid var(--border-color)', color: 'var(--accent-gold)', padding: '0.2rem 0.55rem', borderRadius: '12px', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Practice Quiz
+                  </button>
+                </div>
+              </div>
+
+              {/* Chat Log Body */}
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingRight: '0.25rem' }}>
+                {aiChatMessages.map(msg => (
+                  <div
+                    key={msg.id}
+                    style={{
+                      alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                      maxWidth: '85%',
+                      backgroundColor: msg.sender === 'user' ? 'var(--primary-glow)' : 'var(--bg-tertiary)',
+                      border: msg.sender === 'user' ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                      borderRadius: '12px',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', gap: '1rem' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: msg.sender === 'user' ? 'var(--primary)' : 'var(--secondary)' }}>
+                        {msg.sender === 'user' ? 'You' : 'SkillBot AI'}
+                      </span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{msg.time}</span>
+                    </div>
+                    <div style={{ color: 'var(--text-primary)', whiteSpace: 'pre-line', lineHeight: 1.5 }}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+
+                {isAiThinking && (
+                  <div style={{ alignSelf: 'flex-start', color: 'var(--text-muted)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Sparkles size={14} className="animate-spin" />
+                    <span>SkillBot is analyzing lesson content...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* AI Chat Input Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendAiQuestion();
+                }}
+                style={{ display: 'flex', gap: '0.5rem' }}
+              >
+                <input
+                  type="text"
+                  placeholder="Ask SkillBot a question about this lesson..."
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  className="form-input"
+                  style={{ flex: 1, borderRadius: '20px', padding: '0.55rem 1rem', fontSize: '0.85rem' }}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  style={{ borderRadius: '50%', width: '38px', height: '38px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Send size={15} />
+                </button>
+              </form>
+            </div>
+          )}
+
+          {bottomTab === 'transcript' && (
+            <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', height: '360px' }}>
+              <h3 style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Clock size={16} style={{ color: 'var(--secondary)' }} />
                 <span>Interactive Transcript</span>
               </h3>
@@ -456,12 +654,13 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
                 })}
               </div>
             </div>
+          )}
 
-            {/* Chat Playback Panel */}
-            <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', height: '350px' }}>
-              <h3 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {bottomTab === 'chat' && (
+            <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', height: '360px' }}>
+              <h3 style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <MessageSquare size={16} style={{ color: 'var(--accent-mint)' }} />
-                <span>Chat Playback</span>
+                <span>Historical Chat Replay</span>
               </h3>
 
               <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -482,11 +681,11 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
                 )}
               </div>
             </div>
-          </div>
+          )}
 
           {/* Lesson Materials Center */}
-          <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <h3 style={{ fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Download size={16} style={{ color: 'var(--accent-gold)' }} />
               <span>Lesson Attachments & Slides</span>
             </h3>
@@ -521,9 +720,6 @@ export default function RecordedArchive({ recordedLessons, purchasedCourseIds = 
       <style>{`
         @media (max-width: 900px) {
           .archive-layout {
-            grid-template-columns: 1fr !important;
-          }
-          .timeline-elements {
             grid-template-columns: 1fr !important;
           }
         }
