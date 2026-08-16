@@ -4,13 +4,13 @@ import logo from '../assets/logo.svg';
 import { sendVerificationEmail, getStoredEmailConfig, saveEmailConfig } from '../services/emailService';
 
 interface LoginProps {
-  onLogin: (user: { name: string; role: 'student' | 'teacher'; instructorId?: string; email?: string; isEmailVerified?: boolean }) => void;
+  onLogin: (user: { name: string; role: 'student' | 'teacher' | 'admin'; instructorId?: string; email?: string; isEmailVerified?: boolean }) => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup');
   const [step, setStep] = useState<'details' | 'otp'>('details');
-  const [role, setRole] = useState<'student' | 'teacher'>('student');
+  const [role, setRole] = useState<'student' | 'teacher' | 'admin'>('student');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -139,8 +139,15 @@ export default function Login({ onLogin }: LoginProps) {
     executeLogin(username, role, userEmail, true);
   };
 
-  const executeLogin = (userStr: string, userRole: 'student' | 'teacher', userEmail: string, isVerified: boolean) => {
-    if (userRole === 'student') {
+  const executeLogin = (userStr: string, userRole: 'student' | 'teacher' | 'admin', userEmail: string, isVerified: boolean) => {
+    if (userRole === 'admin') {
+      onLogin({
+        name: 'Admin Control',
+        role: 'admin',
+        email: userEmail || 'admin@skillnara.edu',
+        isEmailVerified: true
+      });
+    } else if (userRole === 'student') {
       onLogin({
         name: userStr,
         role: 'student',
@@ -321,6 +328,15 @@ export default function Login({ onLogin }: LoginProps) {
               >
                 <Monitor size={16} />
                 <span>Instructor</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setRole('admin'); setError(''); }}
+                className={`btn btn-sm ${role === 'admin' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ flex: 1, borderRadius: '50px', fontSize: '0.85rem', gap: '0.4rem' }}
+              >
+                <ShieldCheck size={16} />
+                <span>Admin</span>
               </button>
             </div>
 
@@ -561,12 +577,12 @@ export default function Login({ onLogin }: LoginProps) {
             >
               Login as Student Nara (Verified ✓)
             </button>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.4rem' }}>
               <button
                 type="button"
                 onClick={() => executeLogin("Sree Ma'am", 'teacher', 'sree@skillnara.edu', true)}
                 className="btn btn-secondary btn-sm"
-                style={{ borderRadius: '20px', fontSize: '0.8rem', justifyContent: 'center' }}
+                style={{ borderRadius: '20px', fontSize: '0.75rem', justifyContent: 'center' }}
               >
                 Sree Ma'am
               </button>
@@ -574,9 +590,17 @@ export default function Login({ onLogin }: LoginProps) {
                 type="button"
                 onClick={() => executeLogin("Bhawna Ma'am", 'teacher', 'bhawna@skillnara.edu', true)}
                 className="btn btn-secondary btn-sm"
-                style={{ borderRadius: '20px', fontSize: '0.8rem', justifyContent: 'center' }}
+                style={{ borderRadius: '20px', fontSize: '0.75rem', justifyContent: 'center' }}
               >
                 Bhawna Ma'am
+              </button>
+              <button
+                type="button"
+                onClick={() => executeLogin("Admin Control", 'admin', 'admin@skillnara.edu', true)}
+                className="btn btn-primary btn-sm"
+                style={{ borderRadius: '20px', fontSize: '0.75rem', justifyContent: 'center' }}
+              >
+                Admin Control
               </button>
             </div>
           </div>

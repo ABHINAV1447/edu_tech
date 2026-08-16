@@ -22,7 +22,7 @@ interface CourseType {
 
 interface User {
   name: string;
-  role: 'student' | 'teacher';
+  role: 'student' | 'teacher' | 'admin';
   instructorId?: string;
 }
 

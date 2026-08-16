@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
-  Send, Users, Mic, MicOff, Video as VideoIcon, VideoOff, Hand, Award, 
+  Send, Users, Mic, MicOff, Video as VideoIcon, Video, VideoOff, Hand, Award, 
   Lock, Monitor, Disc, Info, MessageSquare, PhoneOff, 
   Copy, Pin, Smile, LayoutGrid, X, Check, Search, Tv, Volume2, Presentation, Play
 } from 'lucide-react';
@@ -16,7 +16,7 @@ interface ChatMessage {
 
 interface UserType {
   name: string;
-  role: 'student' | 'teacher';
+  role: 'student' | 'teacher' | 'admin';
   instructorId?: string;
 }
 
@@ -133,6 +133,7 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showIvsModal, setShowIvsModal] = useState(false);
 
   // Form states to publish recording
   const [publishDescription, setPublishDescription] = useState(`Recorded live lecture covering "${liveTitle}". Key discussions included language structures, interactive quizzes, and student whiteboard activities.`);
@@ -584,6 +585,63 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
         </div>
       )}
 
+      {/* Amazon IVS OBS Stream Key Modal */}
+      {showIvsModal && (
+        <div style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500, padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: '#18191c', border: '1px solid #ff9000',
+            borderRadius: '16px', padding: '2rem', maxWidth: '540px', width: '100%', display: 'flex', flexDirection: 'column', gap: '1.25rem', color: '#ffffff'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Video size={22} style={{ color: '#ff9000' }} />
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>Amazon IVS Stream & OBS Settings</h3>
+              </div>
+              <button onClick={() => setShowIvsModal(false)} style={{ background: 'none', border: 'none', color: '#9aa0a6', cursor: 'pointer' }}>
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#9aa0a6', margin: 0 }}>
+              Use OBS Studio or any RTMP software to broadcast directly to Amazon IVS Low-Latency stream engine.
+            </p>
+
+            <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.82rem' }}>
+              <div>
+                <label style={{ color: '#ff9000', fontWeight: 700 }}>RTMPS Ingestion Endpoint</label>
+                <div style={{ backgroundColor: 'rgba(0,0,0,0.4)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontFamily: 'monospace', color: '#ffffff', marginTop: '0.2rem' }}>
+                  rtmps://a1b2c3d4e5f6.global-contribute.live-video.net:443/app/
+                </div>
+              </div>
+
+              <div>
+                <label style={{ color: '#ff9000', fontWeight: 700 }}>Stream Key</label>
+                <div style={{ backgroundColor: 'rgba(0,0,0,0.4)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontFamily: 'monospace', color: '#34d399', marginTop: '0.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>sk_us-east-1_skillnara_live_key_98412</span>
+                  <button onClick={() => alert('Stream key copied to clipboard!')} style={{ background: 'none', border: 'none', color: '#ff9000', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700 }}>
+                    Copy Key
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ color: '#9aa0a6', fontWeight: 700 }}>S3 Auto-Record Destination</label>
+                <div style={{ color: '#e8eaed', marginTop: '0.2rem' }}>
+                  <code>s3://skillnara-ivs-recordings-us-east-1/</code> (Auto-VOD enabled)
+                </div>
+              </div>
+            </div>
+
+            <button onClick={() => setShowIvsModal(false)} className="btn btn-primary" style={{ borderRadius: '20px', justifyContent: 'center' }}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. Google Meet Pixel-Perfect Top Header Bar */}
       <header style={{
         height: '60px',
@@ -626,6 +684,21 @@ export default function LiveClassroom({ user, purchasedCourseIds = [], onTrigger
         {/* Right: Presentation / Call Status, Layout & Time */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           
+          {/* Amazon IVS OBS Stream Key Button */}
+          {isTeacher && (
+            <button
+              onClick={() => setShowIvsModal(true)}
+              style={{
+                backgroundColor: 'rgba(255, 144, 0, 0.15)', border: '1px solid rgba(255, 144, 0, 0.4)',
+                color: '#ff9000', borderRadius: '20px', padding: '0.35rem 0.9rem', fontSize: '0.78rem',
+                fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer'
+              }}
+            >
+              <Video size={14} />
+              <span>Amazon IVS Stream Key</span>
+            </button>
+          )}
+
           {/* Quick Present Action Banner Button */}
           {isTeacher && !isAnyScreenOrSlideShared && (
             <button

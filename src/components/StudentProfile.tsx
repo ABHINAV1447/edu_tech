@@ -3,7 +3,7 @@ import { User, Award, BookMarked, Settings, Flame, ShieldCheck, Download, Plus, 
 
 interface UserType {
   name: string;
-  role: 'student' | 'teacher';
+  role: 'student' | 'teacher' | 'admin';
   email?: string;
   isEmailVerified?: boolean;
 }

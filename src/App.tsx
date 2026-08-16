@@ -8,6 +8,8 @@ import Login from './components/Login';
 import CheckoutModal from './components/CheckoutModal';
 import AboutUs from './components/AboutUs';
 import SkillBotWidget from './components/SkillBotWidget';
+import AdminDashboard from './components/AdminDashboard';
+import AssignmentsModule from './components/AssignmentsModule';
 import './App.css';
 
 interface RecordedLesson {
@@ -25,8 +27,10 @@ interface RecordedLesson {
 
 interface UserType {
   name: string;
-  role: 'student' | 'teacher';
+  role: 'student' | 'teacher' | 'admin';
   instructorId?: string;
+  email?: string;
+  isEmailVerified?: boolean;
 }
 
 interface CourseType {
@@ -227,6 +231,17 @@ export default function App() {
           <RecordedArchive
             recordedLessons={recordedLessons}
             purchasedCourseIds={purchasedCourseIds}
+            onTriggerCheckout={(course) => setCheckoutCourse(course)}
+          />
+        );
+      case 'assignments':
+        return (
+          <AssignmentsModule user={user || { name: 'Student Nara', role: 'student' }} />
+        );
+      case 'admin':
+        return (
+          <AdminDashboard
+            setActiveTab={setActiveTab}
             onTriggerCheckout={(course) => setCheckoutCourse(course)}
           />
         );
