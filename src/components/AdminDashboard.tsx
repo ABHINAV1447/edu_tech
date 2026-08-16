@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Server, Database, Video, Shield, Users, Plus, FileText, Activity } from 'lucide-react';
+import { Server, Database, Video, Shield, Users, Plus, FileText, Activity, Bell, Cpu } from 'lucide-react';
+import CloudWatchMonitor from './CloudWatchMonitor';
+import ArchitectureScaler from './ArchitectureScaler';
 
 interface CourseType {
   id: string;
@@ -14,7 +16,7 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ setActiveTab }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<'aws' | 'courses' | 'users' | 'ivs'>('aws');
+  const [adminTab, setAdminTab] = useState<'aws' | 'courses' | 'users' | 'ivs' | 'cloudwatch' | 'scaling'>('aws');
 
   // New Course Form State
   const [newCourseTitle, setNewCourseTitle] = useState('');
@@ -115,6 +117,24 @@ export default function AdminDashboard({ setActiveTab }: AdminDashboardProps) {
         >
           <Video size={15} />
           <span>Amazon IVS & S3 VOD Pipeline</span>
+        </button>
+
+        <button
+          onClick={() => setAdminTab('cloudwatch')}
+          className={`btn btn-sm ${adminTab === 'cloudwatch' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ borderRadius: '20px', fontSize: '0.82rem', gap: '0.4rem' }}
+        >
+          <Bell size={15} />
+          <span>CloudWatch & S3 Cost Guard</span>
+        </button>
+
+        <button
+          onClick={() => setAdminTab('scaling')}
+          className={`btn btn-sm ${adminTab === 'scaling' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ borderRadius: '20px', fontSize: '0.82rem', gap: '0.4rem' }}
+        >
+          <Cpu size={15} />
+          <span>Scaling & Security Suite</span>
         </button>
       </div>
 
@@ -366,6 +386,16 @@ export default function AdminDashboard({ setActiveTab }: AdminDashboardProps) {
             Test Amazon IVS Live Stream Player
           </button>
         </div>
+      )}
+
+      {/* SUB-TAB 5: CLOUDWATCH ALARMS & S3 COST GUARD */}
+      {adminTab === 'cloudwatch' && (
+        <CloudWatchMonitor />
+      )}
+
+      {/* SUB-TAB 6: SCALING ARCHITECTURE & SECURITY SUITE */}
+      {adminTab === 'scaling' && (
+        <ArchitectureScaler />
       )}
 
     </div>
